@@ -34,6 +34,9 @@ class RuntimeConfig:
     heartbeat_interval_sec: int
     poll_interval_sec: int
     log_level: str
+    beacon_interval_sec: int = 10800
+    beacon_channel: int = 2
+    beacon_text: str = ""
 
 
 @dataclass
@@ -45,6 +48,7 @@ class GatewayConfig:
     radio_band: str
     channel_name: str
     channel_number: int
+    channel_scope: str
     protocol_version: str
     meshcli: MeshCliConfig
     mqtt: MqttConfig
@@ -61,8 +65,17 @@ def load_config(path: str | Path) -> GatewayConfig:
         radio_band=str(data["radio_band"]),
         channel_name=data["channel_name"],
         channel_number=int(data["channel_number"]),
+        channel_scope=str(data.get("channel_scope", "#it-lo")),
         protocol_version=str(data["protocol_version"]),
         meshcli=MeshCliConfig(**data["meshcli"]),
         mqtt=MqttConfig(**data["mqtt"]),
-        runtime=RuntimeConfig(**data["runtime"]),
+        runtime=RuntimeConfig(
+            dedupe_ttl_sec=data["runtime"]["dedupe_ttl_sec"],
+            heartbeat_interval_sec=data["runtime"]["heartbeat_interval_sec"],
+            poll_interval_sec=data["runtime"]["poll_interval_sec"],
+            log_level=data["runtime"]["log_level"],
+            beacon_interval_sec=int(data["runtime"].get("beacon_interval_sec", 10800)),
+            beacon_channel=int(data["runtime"].get("beacon_channel", 2)),
+            beacon_text=str(data["runtime"].get("beacon_text", "")),
+        ),
     )

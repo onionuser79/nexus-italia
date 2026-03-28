@@ -5,6 +5,7 @@ mesh_id: mesh-[provincia]
 radio_band: "868"
 channel_name: NEXUS
 channel_number: 1
+channel_scope: "#it-lo"
 protocol_version: "1.0"
 
 meshcli:
@@ -31,3 +32,6 @@ runtime:
   heartbeat_interval_sec: 30
   poll_interval_sec: 5
   log_level: INFO
+  beacon_interval_sec: 10800
+  beacon_channel: 2
+  beacon_text: "NEXUS-ITALIA Gateway [sigla provincia] - meshcoreitalia.it"

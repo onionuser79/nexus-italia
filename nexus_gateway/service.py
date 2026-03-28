@@ -23,13 +23,17 @@ class GatewayService:
         self.mqtt = GatewayMqttClient(config.mqtt, self.handle_downlink)
         self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
         self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
+        self._beacon_thread = threading.Thread(target=self._beacon_loop, daemon=True)
 
     def start(self) -> None:
         logger.info("gateway service started", extra={"extra": {"gateway_id": self.config.gateway_id}})
+        self._configure_scope()
         self.mqtt.connect()
         self.publish_status("online")
         self._heartbeat_thread.start()
         self._poll_thread.start()
+        if self.config.runtime.beacon_text:
+            self._beacon_thread.start()
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
         while not self.stop_event.is_set():
@@ -40,6 +44,23 @@ class GatewayService:
     def _signal_handler(self, signum: int, frame: object) -> None:
         logger.info("shutdown requested", extra={"extra": {"signal": signum}})
         self.stop_event.set()
+
+    def _configure_scope(self) -> None:
+        scope = self.config.channel_scope
+        try:
+            self.meshcli.set_scope(scope)
+            logger.info("channel scope configured", extra={"extra": {"scope": scope}})
+        except Exception as exc:
+            logger.exception("failed to set channel scope", extra={"extra": {"error": str(exc), "scope": scope}})
+
+    def _beacon_loop(self) -> None:
+        self.stop_event.wait(10)
+        while not self.stop_event.is_set():
+            try:
+                self.meshcli.send_beacon(self.config.runtime.beacon_channel, self.config.runtime.beacon_text)
+            except Exception as exc:
+                logger.exception("beacon transmit failed", extra={"extra": {"error": str(exc)}})
+            self.stop_event.wait(self.config.runtime.beacon_interval_sec)
 
     def _heartbeat_loop(self) -> None:
         while not self.stop_event.is_set():

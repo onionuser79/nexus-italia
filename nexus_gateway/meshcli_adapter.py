@@ -53,6 +53,14 @@ class MeshCliAdapter:
             return []
         return data
 
+    def set_scope(self, scope: str) -> None:
+        self._run("scope", scope)
+        logger.info("channel scope set", extra={"extra": {"scope": scope}})
+
+    def send_beacon(self, channel: int, text: str) -> None:
+        self._run("chan", str(channel), text)
+        logger.info("beacon transmitted", extra={"extra": {"text": text, "channel": channel}})
+
     def send_channel_message(self, payload: str) -> None:
         self._run("chan", str(self.config.channel_number), payload)
 
