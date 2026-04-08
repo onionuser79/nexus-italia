@@ -5,7 +5,7 @@ mesh_id: mesh-[provincia]
 radio_band: "868"
 channel_name: NEXUS
 channel_number: 1
-channel_scope: "#it-lo"
+channel_scope: "it-lo"
 protocol_version: "1.0"
 
 meshcli:

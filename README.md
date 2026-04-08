@@ -96,16 +96,18 @@ This version introduces the following features:
 At gateway startup, the scope is automatically set on the Nexus channel using the command:
 
 ```bash
-meshcli -j -s /dev/ttyUSB0 -b 115200 scope "#it-lo"
+meshcli -j -s /dev/ttyUSB0 -b 115200 scope "it-lo"
 ```
 
 The scope is configurable in `config.yaml`:
 
 ```yaml
-channel_scope: "#it-lo"
+channel_scope: "it-lo"
 ```
 
-If `channel_scope` is not present, the default value is `#it-lo`.
+If `channel_scope` is not present, the default value is `it-lo`.
+
+> **Note:** Starting from meshcore_py v2.3.5, the scope should be set as `it-lo` without the `#` prefix, matching the app convention. The `#` was removed to avoid confusion with channel names that also start with `#`. (Credit: Armando Accardo)
 
 ### 2. Periodic RF beacon on the Nexus channel
 
@@ -163,7 +165,7 @@ Both adverts are also sent once at service startup (+15s and +20s respectively).
 ### Full beacon + advert configuration example
 
 ```yaml
-channel_scope: "#it-lo"
+channel_scope: "it-lo"
 
 runtime:
   dedupe_ttl_sec: 180

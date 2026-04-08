@@ -69,7 +69,7 @@ def load_config(path: str | Path) -> GatewayConfig:
         radio_band=str(data["radio_band"]),
         channel_name=data["channel_name"],
         channel_number=int(data["channel_number"]),
-        channel_scope=str(data.get("channel_scope", "#it-lo")),
+        channel_scope=str(data.get("channel_scope", "it-lo")),
         protocol_version=str(data["protocol_version"]),
         meshcli=MeshCliConfig(**data["meshcli"]),
         mqtt=MqttConfig(**data["mqtt"]),
