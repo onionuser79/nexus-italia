@@ -35,3 +35,7 @@ runtime:
   beacon_interval_sec: 10800
   beacon_channel: 2
   beacon_text: "NEXUS-ITALIA Gateway [sigla provincia] - meshcoreitalia.it"
+  advert_enabled: true             # advert 0hop (meshcli advert)
+  advert_interval_sec: 3600        # ogni 1 ora
+  flood_advert_enabled: true       # flood advert (meshcli floodadv)
+  flood_advert_interval_sec: 10800 # ogni 3 ore

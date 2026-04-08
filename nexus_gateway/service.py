@@ -24,6 +24,8 @@ class GatewayService:
         self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
         self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
         self._beacon_thread = threading.Thread(target=self._beacon_loop, daemon=True)
+        self._advert_thread = threading.Thread(target=self._advert_loop, daemon=True)
+        self._flood_advert_thread = threading.Thread(target=self._flood_advert_loop, daemon=True)
 
     def start(self) -> None:
         logger.info("gateway service started", extra={"extra": {"gateway_id": self.config.gateway_id}})
@@ -34,6 +36,12 @@ class GatewayService:
         self._poll_thread.start()
         if self.config.runtime.beacon_text:
             self._beacon_thread.start()
+        if self.config.runtime.advert_enabled:
+            self._advert_thread.start()
+            logger.info("advert 0hop enabled", extra={"extra": {"interval_sec": self.config.runtime.advert_interval_sec}})
+        if self.config.runtime.flood_advert_enabled:
+            self._flood_advert_thread.start()
+            logger.info("flood advert enabled", extra={"extra": {"interval_sec": self.config.runtime.flood_advert_interval_sec}})
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
         while not self.stop_event.is_set():
@@ -61,6 +69,24 @@ class GatewayService:
             except Exception as exc:
                 logger.exception("beacon transmit failed", extra={"extra": {"error": str(exc)}})
             self.stop_event.wait(self.config.runtime.beacon_interval_sec)
+
+    def _advert_loop(self) -> None:
+        self.stop_event.wait(15)
+        while not self.stop_event.is_set():
+            try:
+                self.meshcli.send_advert()
+            except Exception as exc:
+                logger.exception("advert 0hop failed", extra={"extra": {"error": str(exc)}})
+            self.stop_event.wait(self.config.runtime.advert_interval_sec)
+
+    def _flood_advert_loop(self) -> None:
+        self.stop_event.wait(20)
+        while not self.stop_event.is_set():
+            try:
+                self.meshcli.send_flood_advert()
+            except Exception as exc:
+                logger.exception("flood advert failed", extra={"extra": {"error": str(exc)}})
+            self.stop_event.wait(self.config.runtime.flood_advert_interval_sec)
 
     def _heartbeat_loop(self) -> None:
         while not self.stop_event.is_set():

@@ -37,6 +37,10 @@ class RuntimeConfig:
     beacon_interval_sec: int = 10800
     beacon_channel: int = 2
     beacon_text: str = ""
+    advert_interval_sec: int = 3600
+    advert_enabled: bool = False
+    flood_advert_interval_sec: int = 10800
+    flood_advert_enabled: bool = False
 
 
 @dataclass
@@ -77,5 +81,9 @@ def load_config(path: str | Path) -> GatewayConfig:
             beacon_interval_sec=int(data["runtime"].get("beacon_interval_sec", 10800)),
             beacon_channel=int(data["runtime"].get("beacon_channel", 2)),
             beacon_text=str(data["runtime"].get("beacon_text", "")),
+            advert_interval_sec=int(data["runtime"].get("advert_interval_sec", 3600)),
+            advert_enabled=bool(data["runtime"].get("advert_enabled", False)),
+            flood_advert_interval_sec=int(data["runtime"].get("flood_advert_interval_sec", 10800)),
+            flood_advert_enabled=bool(data["runtime"].get("flood_advert_enabled", False)),
         ),
     )

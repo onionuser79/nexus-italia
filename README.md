@@ -132,14 +132,33 @@ runtime:
 
 Oltre al beacon periodico, il gateway invia un primo beacon **10 secondi dopo lo startup**, in modo da annunciarsi immediatamente sulla rete RF dopo un riavvio o un'accensione.
 
+### 4. Advert periodico (0hop e flood)
+
+Il gateway può inviare periodicamente i comandi `advert` e `floodadv` per annunciare il Companion sulla rete MeshCore:
+
+- **advert (0hop)** — annuncio locale, non propagato. Default: ogni **1 ora**.
+- **floodadv (flood)** — annuncio propagato sulla rete mesh. Default: ogni **3 ore**.
+
+Parametri configurabili in `config.yaml` sotto la sezione `runtime`:
+
+```yaml
+runtime:
+  advert_enabled: true             # abilita advert 0hop
+  advert_interval_sec: 3600        # intervallo in secondi (default: 1 ora)
+  flood_advert_enabled: true       # abilita flood advert
+  flood_advert_interval_sec: 10800 # intervallo in secondi (default: 3 ore)
+```
+
+Entrambi gli advert vengono inviati anche una volta all'avvio del servizio (rispettivamente a +15s e +20s dallo startup).
+
 ### File modificati
 
 | File | Modifica |
 |------|----------|
-| `nexus_gateway/config.py` | Aggiunti campi `channel_scope`, `beacon_channel`, `beacon_interval_sec`, `beacon_text` |
-| `nexus_gateway/meshcli_adapter.py` | Aggiunti metodi `set_scope()` e `send_beacon()` |
-| `nexus_gateway/service.py` | Chiamata `set_scope()` allo startup, beacon iniziale a +10 s, loop beacon ricorrente in thread |
-| `config.example.yaml` | Documentati i nuovi parametri con valori di default |
+| `nexus_gateway/config.py` | Aggiunti campi `channel_scope`, beacon, advert e flood advert |
+| `nexus_gateway/meshcli_adapter.py` | Aggiunti metodi `set_scope()`, `send_beacon()`, `send_advert()`, `send_flood_advert()` |
+| `nexus_gateway/service.py` | Scope allo startup, beacon/advert/flood advert in thread separati |
+| `config.example.yaml` | Documentati tutti i parametri con valori di default e nota su poll/OLED |
 
 ### Esempio completo di configurazione beacon
 

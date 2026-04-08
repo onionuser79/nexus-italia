@@ -61,6 +61,14 @@ class MeshCliAdapter:
         self._run("chan", str(channel), text)
         logger.info("beacon transmitted", extra={"extra": {"text": text, "channel": channel}})
 
+    def send_advert(self) -> None:
+        self._run("advert")
+        logger.info("advert 0hop transmitted")
+
+    def send_flood_advert(self) -> None:
+        self._run("floodadv")
+        logger.info("flood advert transmitted")
+
     def send_channel_message(self, payload: str) -> None:
         self._run("chan", str(self.config.channel_number), payload)
 
