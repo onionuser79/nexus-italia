@@ -174,7 +174,7 @@ runtime:
   log_level: INFO
   beacon_interval_sec: 10800
   beacon_channel: 2
-  beacon_text: "NEXUS-ITALIA Gateway RM - meshcoreitalia.it"
+  beacon_text: "NEXUS-ITALIA Gateway MI - meshcoreitalia.it"
   advert_enabled: true
   advert_interval_sec: 3600
   flood_advert_enabled: true
