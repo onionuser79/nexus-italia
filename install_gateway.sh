@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_DIR="/opt/nexus-gateway"
-SERVICE_FILE="/etc/systemd/system/nexus-gateway.service"
+APP_DIR="/opt/nexus-gateway-v2"
+SERVICE_NAME="nexus-gateway-v2"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 DEFAULT_BAUD="115200"
 DEFAULT_POLL="5"
 DEFAULT_HEARTBEAT="30"
@@ -123,13 +124,13 @@ configure_user_access() {
 }
 
 write_service() {
-  sed "s/__SERVICE_USER__/$SERVICE_USER/g" systemd/nexus-gateway.service > "$SERVICE_FILE"
+  sed "s/__SERVICE_USER__/$SERVICE_USER/g" systemd/nexus-gateway-v2.service > "$SERVICE_FILE"
   systemctl daemon-reload
 }
 
 start_service() {
-  systemctl enable nexus-gateway
-  systemctl restart nexus-gateway
+  systemctl enable "$SERVICE_NAME"
+  systemctl restart "$SERVICE_NAME"
 }
 
 print_summary() {
@@ -138,15 +139,23 @@ print_summary() {
 Installazione completata.
 
 Comandi utili:
-  sudo systemctl status nexus-gateway --no-pager
-  journalctl -u nexus-gateway -f
-  sudo systemctl restart nexus-gateway
+  sudo systemctl status $SERVICE_NAME --no-pager
+  journalctl -u $SERVICE_NAME -f
+  sudo systemctl restart $SERVICE_NAME
 
 Config:
   $APP_DIR/config.yaml
 
 Il gateway usa una connessione seriale persistente al companion MeshCore.
-  La connessione verrà stabilita automaticamente all'avvio del servizio.
+La connessione verrà stabilita automaticamente all'avvio del servizio.
+
+NOTA: Questa installazione (v2) è indipendente dalla v1 in /opt/nexus-gateway.
+  Per passare dalla v1 alla v2:
+    sudo systemctl stop nexus-gateway
+    sudo systemctl start $SERVICE_NAME
+  Per tornare alla v1:
+    sudo systemctl stop $SERVICE_NAME
+    sudo systemctl start nexus-gateway
 EOF
 }
 

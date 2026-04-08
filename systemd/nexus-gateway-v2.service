@@ -1,0 +1,17 @@
+[Unit]
+Description=NEXUS-ITALIA Gateway Service v2 (persistent serial)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__SERVICE_USER__
+Group=__SERVICE_USER__
+WorkingDirectory=/opt/nexus-gateway-v2
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/nexus-gateway-v2/.venv/bin/python -m nexus_gateway.main --config /opt/nexus-gateway-v2/config.yaml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

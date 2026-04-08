@@ -63,26 +63,40 @@ Working configuration already verified:
 Service status:
 
 ```bash
-sudo systemctl status nexus-gateway --no-pager
+sudo systemctl status nexus-gateway-v2 --no-pager
 ```
 
 Live logs:
 
 ```bash
-journalctl -u nexus-gateway -f
+journalctl -u nexus-gateway-v2 -f
 ```
 
 Restart:
 
 ```bash
-sudo systemctl restart nexus-gateway
+sudo systemctl restart nexus-gateway-v2
+```
+
+### Switching between v1 and v2
+
+```bash
+# Switch to v2 (persistent serial)
+sudo systemctl stop nexus-gateway
+sudo systemctl start nexus-gateway-v2
+
+# Switch back to v1 (meshcli subprocess)
+sudo systemctl stop nexus-gateway-v2
+sudo systemctl start nexus-gateway
 ```
 
 ## Installed paths
 
-- Application: `/opt/nexus-gateway`
-- Configuration: `/opt/nexus-gateway/config.yaml`
-- Service: `/etc/systemd/system/nexus-gateway.service`
+- Application: `/opt/nexus-gateway-v2`
+- Configuration: `/opt/nexus-gateway-v2/config.yaml`
+- Service: `/etc/systemd/system/nexus-gateway-v2.service`
+
+> **Note:** This version installs alongside the previous v1 (`/opt/nexus-gateway`) without conflicts. Both have independent venvs and systemd services. Only one should be running at a time since they share the same serial port.
 
 ---
 
@@ -213,15 +227,8 @@ runtime:
 The install script adds the service user to the `dialout` group for serial port access.
 After installation, if the Companion is not immediately detected by the service, a Raspberry Pi reboot may help.
 
-## Upgrading from meshcli-based versions
+## Coexistence with v1
 
-If you are upgrading from a previous version that used `meshcli` subprocesses:
+This version (v2) installs to `/opt/nexus-gateway-v2` with its own venv and systemd service (`nexus-gateway-v2`). The previous v1 installation at `/opt/nexus-gateway` remains untouched.
 
-1. Update the gateway files: `cd nexus-italia && git pull`
-2. Re-run the installer or manually update the venv:
-   ```bash
-   cd /opt/nexus-gateway
-   sudo -u <service-user> .venv/bin/pip install -r requirements.txt
-   ```
-3. Update `config.yaml`: rename the `meshcli:` section to `meshcore:` and remove the `command` and `timeout_sec` fields (the gateway also accepts the old `meshcli:` key for backward compatibility)
-4. Restart the service: `sudo systemctl restart nexus-gateway`
+**Important:** Both versions use the same serial port to the Companion. Only run one at a time — stop one before starting the other.
