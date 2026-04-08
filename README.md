@@ -109,6 +109,8 @@ If `channel_scope` is not present, the default value is `it-lo`.
 
 > **Note:** Starting from meshcore_py v2.3.5, the scope should be set as `it-lo` without the `#` prefix, matching the app convention. The `#` was removed to avoid confusion with channel names that also start with `#`. (Credit: Armando Accardo)
 
+**Companion reboot detection:** The scope setting is lost if the Companion device reboots (power loss, USB disconnect, etc.). The gateway automatically detects reboots by monitoring the Companion uptime via `meshcli stats-core`. If a reboot is detected (uptime decreases), the scope is re-applied immediately before the next message poll.
+
 ### 2. Periodic RF beacon on the Nexus channel
 
 The gateway periodically transmits a beacon message via RF on the Nexus channel, using the command:
@@ -158,8 +160,8 @@ Both adverts are also sent once at service startup (+15s and +20s respectively).
 | File | Change |
 |------|--------|
 | `nexus_gateway/config.py` | Added `channel_scope`, beacon, advert and flood advert fields |
-| `nexus_gateway/meshcli_adapter.py` | Added `set_scope()`, `send_beacon()`, `send_advert()`, `send_flood_advert()` methods |
-| `nexus_gateway/service.py` | Scope at startup, beacon/advert/flood advert in separate threads |
+| `nexus_gateway/meshcli_adapter.py` | Added `set_scope()`, `send_beacon()`, `send_advert()`, `send_flood_advert()`, `get_uptime()` methods |
+| `nexus_gateway/service.py` | Scope at startup with reboot detection, beacon/advert/flood advert in separate threads |
 | `config.example.yaml` | Documented all parameters with default values |
 
 ### Full beacon + advert configuration example

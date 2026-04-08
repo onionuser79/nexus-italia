@@ -69,6 +69,11 @@ class MeshCliAdapter:
         self._run("floodadv")
         logger.info("flood advert transmitted")
 
+    def get_uptime(self) -> int:
+        output = self._run("stats-core")
+        data = json.loads(output or "{}")
+        return int(data.get("uptime_secs", data.get("uptime", 0)))
+
     def send_channel_message(self, payload: str) -> None:
         self._run("chan", str(self.config.channel_number), payload)
 

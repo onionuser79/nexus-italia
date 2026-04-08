@@ -26,6 +26,7 @@ class GatewayService:
         self._beacon_thread = threading.Thread(target=self._beacon_loop, daemon=True)
         self._advert_thread = threading.Thread(target=self._advert_loop, daemon=True)
         self._flood_advert_thread = threading.Thread(target=self._flood_advert_loop, daemon=True)
+        self._last_companion_uptime: int = 0
 
     def start(self) -> None:
         logger.info("gateway service started", extra={"extra": {"gateway_id": self.config.gateway_id}})
@@ -93,9 +94,23 @@ class GatewayService:
             self.publish_heartbeat()
             self.stop_event.wait(self.config.runtime.heartbeat_interval_sec)
 
+    def _check_companion_reboot(self) -> None:
+        try:
+            uptime = self.meshcli.get_uptime()
+            if uptime < self._last_companion_uptime:
+                logger.warning(
+                    "companion reboot detected, re-applying scope",
+                    extra={"extra": {"prev_uptime": self._last_companion_uptime, "new_uptime": uptime}},
+                )
+                self._configure_scope()
+            self._last_companion_uptime = uptime
+        except Exception as exc:
+            logger.warning("companion uptime check failed", extra={"extra": {"error": str(exc)}})
+
     def _poll_loop(self) -> None:
         while not self.stop_event.is_set():
             try:
+                self._check_companion_reboot()
                 raw = self.meshcli.sync_msgs()
                 normalized = self.meshcli.normalize_messages(raw)
                 for msg in normalized:
