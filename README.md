@@ -18,7 +18,6 @@ This repository automatically installs and configures:
 - MeshCore USB Companion connected
 - MQTT credentials (request at info@meshcoreitalia.it)
 
-
 ## Creating the NEXUS channel with its Secret Key
 
 <img width="302" height="399" alt="nexus" src="https://github.com/user-attachments/assets/8b4a8b6f-4050-4015-a9d1-3f626b3de48f" />
@@ -26,8 +25,6 @@ This repository automatically installs and configures:
 Channel Name: Nexus
 
 Secret Key: a45768ab48e203498edbc11b35cdfbd7
-
-
 
 ## Quick install
 
@@ -87,19 +84,19 @@ sudo systemctl restart nexus-gateway
 - Configuration: `/opt/nexus-gateway/config.yaml`
 - Service: `/etc/systemd/system/nexus-gateway.service`
 
-## Scope and RF beacon configuration (branch `iw2ohx-improvements`)
+---
 
-This version introduces the following features:
+## Advanced features
 
 ### 1. Automatic channel scope configuration
 
-At gateway startup, the scope is automatically set on the Nexus channel using the command:
+At gateway startup, the scope is automatically set on the Nexus channel using:
 
 ```bash
 meshcli -j -s /dev/ttyUSB0 -b 115200 scope "it-lo"
 ```
 
-The scope is configurable in `config.yaml`:
+Configurable in `config.yaml`:
 
 ```yaml
 channel_scope: "it-lo"
@@ -109,17 +106,21 @@ If `channel_scope` is not present, the default value is `it-lo`.
 
 > **Note:** Starting from meshcore_py v2.3.5, the scope should be set as `it-lo` without the `#` prefix, matching the app convention. The `#` was removed to avoid confusion with channel names that also start with `#`. (Credit: Armando Accardo)
 
-**Companion reboot detection:** The scope setting is lost if the Companion device reboots (power loss, USB disconnect, etc.). The gateway automatically detects reboots by monitoring the Companion uptime via `meshcli stats-core`. If a reboot is detected (uptime decreases), the scope is re-applied immediately before the next message poll.
+### 2. Companion reboot detection
 
-### 2. Periodic RF beacon on the Nexus channel
+The scope setting is lost if the Companion device reboots (power loss, USB disconnect, etc.). The gateway automatically detects reboots by monitoring the Companion uptime via `meshcli stats-core` before each poll cycle. If a reboot is detected (uptime decreases compared to the previous reading), the scope is re-applied immediately before any messages are polled.
 
-The gateway periodically transmits a beacon message via RF on the Nexus channel, using the command:
+This ensures messages are never sent without scope on the mesh, even after unexpected Companion restarts.
+
+### 3. Periodic RF beacon on the Nexus channel
+
+The gateway periodically transmits a beacon message via RF on the Nexus channel using:
 
 ```bash
 meshcli -j -s /dev/ttyUSB0 -b 115200 chan 2 "beacon text"
 ```
 
-Configurable parameters in `config.yaml` under the `runtime` section:
+Configurable parameters in `config.yaml` under `runtime`:
 
 ```yaml
 runtime:
@@ -132,9 +133,7 @@ runtime:
 - `beacon_channel` — channel number to transmit the beacon on (default `2`, corresponding to the Nexus channel on the Companion)
 - `beacon_text` — beacon text; if empty, the beacon is disabled
 
-### 3. Initial beacon 10 seconds after startup
-
-In addition to the periodic beacon, the gateway sends a first beacon **10 seconds after startup**, to announce itself immediately on the RF network after a reboot or power-on.
+An initial beacon is also sent **10 seconds after startup**, to announce the gateway immediately on the RF network after a reboot.
 
 ### 4. Periodic advert (0hop and flood)
 
@@ -143,7 +142,7 @@ The gateway can periodically send `advert` and `floodadv` commands to announce t
 - **advert (0hop)** — local announcement, not propagated. Default: every **1 hour**.
 - **floodadv (flood)** — announcement propagated across the mesh network. Default: every **3 hours**.
 
-Configurable parameters in `config.yaml` under the `runtime` section:
+Configurable parameters in `config.yaml` under `runtime`:
 
 ```yaml
 runtime:
@@ -155,16 +154,7 @@ runtime:
 
 Both adverts are also sent once at service startup (+15s and +20s respectively).
 
-### Modified files
-
-| File | Change |
-|------|--------|
-| `nexus_gateway/config.py` | Added `channel_scope`, beacon, advert and flood advert fields |
-| `nexus_gateway/meshcli_adapter.py` | Added `set_scope()`, `send_beacon()`, `send_advert()`, `send_flood_advert()`, `get_uptime()` methods |
-| `nexus_gateway/service.py` | Scope at startup with reboot detection, beacon/advert/flood advert in separate threads |
-| `config.example.yaml` | Documented all parameters with default values |
-
-### Full beacon + advert configuration example
+### Full configuration example
 
 ```yaml
 channel_scope: "it-lo"
