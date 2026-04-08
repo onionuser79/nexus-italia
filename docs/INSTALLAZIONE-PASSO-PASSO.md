@@ -1,60 +1,60 @@
-# Installazione passo passo del gateway NEXUS-ITALIA
+# NEXUS-ITALIA Gateway step-by-step installation
 
-## 1. Preparazione broker MQTT
+## 1. MQTT broker preparation
 
-Prima di installare il gateway, sul broker devono esistere:
+Before installing the gateway, the broker must have:
 
-- utente MQTT uguale al `gateway_id`
-- ACL coerenti con i topic:
+- An MQTT user matching the `gateway_id`
+- ACLs consistent with the topics:
   - `nexus/v1/uplink`
   - `nexus/v1/downlink/<gateway_id>`
   - `nexus/v1/heartbeat/<gateway_id>`
   - `nexus/v1/status/<gateway_id>`
 
-## 2. Collegare il Companion USB
+## 2. Connect the USB Companion
 
-Verifica che il sistema lo veda:
+Verify the system detects it:
 
 ```bash
 ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null
 ```
 
-## 3. Lanciare l'installer
+## 3. Run the installer
 
 ```bash
 sudo bash install_gateway.sh
 ```
 
-## 4. Rispondere ai prompt
+## 4. Answer the prompts
 
-I campi principali sono:
+The main fields are:
 
-- `gateway_id`: per esempio `NEXUS-ITALIA-RM`
-- `site_name`: descrizione del sito
-- `channel_name`: per esempio `NEXUS`
-- `channel_number`: per esempio `1`
-- `mqtt_host`: IP o hostname del broker
-- `mqtt_username`: in genere uguale al `gateway_id`
+- `gateway_id`: for example `NEXUS-ITALIA-RM`
+- `site_name`: site description
+- `channel_name`: for example `NEXUS`
+- `channel_number`: for example `1`
+- `mqtt_host`: broker IP or hostname
+- `mqtt_username`: usually the same as `gateway_id`
 
-## 5. Verificare il servizio
+## 5. Verify the service
 
 ```bash
 sudo systemctl status nexus-gateway --no-pager
 journalctl -u nexus-gateway -f
 ```
 
-## 6. Verificare il traffico lato broker
+## 6. Verify traffic on the broker side
 
-Sul server broker/router:
+On the broker/router server:
 
 ```bash
-mosquitto_sub -h 127.0.0.1 -p 1883 -u router -P 'PASSWORD_ROUTER' -t 'nexus/v1/#' -v
+mosquitto_sub -h 127.0.0.1 -p 1883 -u router -P 'ROUTER_PASSWORD' -t 'nexus/v1/#' -v
 ```
 
-## 7. Test radio locale
+## 7. Local radio test
 
-Sul Raspberry:
+On the Raspberry Pi:
 
 ```bash
-sudo -u <utente-servizio> /opt/nexus-gateway/.venv/bin/meshcli -j -s /dev/ttyUSB0 -b 115200 chan 1 "test nexus"
+sudo -u <service-user> /opt/nexus-gateway/.venv/bin/meshcli -j -s /dev/ttyUSB0 -b 115200 chan 1 "test nexus"
 ```

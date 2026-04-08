@@ -1,37 +1,37 @@
 # NEXUS-ITALIA Gateway Installer
 
-Installer automatico per gateway **NEXUS-ITALIA** basato su Raspberry Pi0 2W e Companion USB MeshCore.
+Automated installer for the **NEXUS-ITALIA** gateway based on Raspberry Pi Zero 2W and a MeshCore USB Companion.
 
-Questo repository installa e configura in automatico:
+This repository automatically installs and configures:
 
-- dipendenze di sistema
-- ambiente Python dedicato
-- `meshcore-cli` dentro il virtualenv del gateway
-- configurazione `config.yaml`
-- servizio `systemd` `nexus-gateway`
-- avvio automatico al boot
+- System dependencies
+- Dedicated Python virtual environment
+- `meshcore-cli` inside the gateway virtualenv
+- `config.yaml` configuration file
+- `systemd` service `nexus-gateway`
+- Automatic start at boot
 
-## Requisiti
+## Requirements
 
 - Raspberry Pi OS / Debian / Ubuntu (NO desktop)
-- accesso Internet
-- Companion USB MeshCore collegato
-- credenziali MQTT da richiedere all'indirizzo email info@meshcoreitalia.it
+- Internet access
+- MeshCore USB Companion connected
+- MQTT credentials (request at info@meshcoreitalia.it)
 
 
-## Creazione canale NEXUS con relativa Secret Key
+## Creating the NEXUS channel with its Secret Key
 
 <img width="302" height="399" alt="nexus" src="https://github.com/user-attachments/assets/8b4a8b6f-4050-4015-a9d1-3f626b3de48f" />
 
-Nome Canale: Nexus
+Channel Name: Nexus
 
 Secret Key: a45768ab48e203498edbc11b35cdfbd7
 
 
 
-## Installazione rapida
+## Quick install
 
-Clona il repository e lancia lo script come root:
+Clone the repository and run the script as root:
 
 ```bash
 sudo apt update
@@ -41,126 +41,126 @@ cd nexus-italia
 sudo bash install_gateway.sh
 ```
 
-Lo script chiede passo passo:
+The script prompts step by step for:
 
-- utente Linux del servizio
-- porta seriale del Companion
+- Linux service user
+- Companion serial port
 - `gateway_id`
-- dati radio locali
-- host/porta/credenziali MQTT
-- nome e numero canale MeshCore
+- Local radio settings
+- MQTT host/port/credentials
+- MeshCore channel name and number
 
-## Valori verificati in test
+## Verified test values
 
-Configurazione funzionante già verificata:
+Working configuration already verified:
 
 - `gateway_id`: `NEXUS-ITALIA-RM`
-- seriale: `/dev/ttyUSB0`
-- canale MeshCore: `NEXUS`
-- numero canale: `1`
-- broker MQTT con autenticazione utente/password
-- servizio avviato via `systemd`
+- Serial port: `/dev/ttyUSB0`
+- MeshCore channel: `NEXUS`
+- Channel number: `1`
+- MQTT broker with username/password authentication
+- Service started via `systemd`
 
-## Comandi utili
+## Useful commands
 
-Stato servizio:
+Service status:
 
 ```bash
 sudo systemctl status nexus-gateway --no-pager
 ```
 
-Log live:
+Live logs:
 
 ```bash
 journalctl -u nexus-gateway -f
 ```
 
-Riavvio:
+Restart:
 
 ```bash
 sudo systemctl restart nexus-gateway
 ```
 
-## Percorsi installati
+## Installed paths
 
-- applicazione: `/opt/nexus-gateway`
-- configurazione: `/opt/nexus-gateway/config.yaml`
-- servizio: `/etc/systemd/system/nexus-gateway.service`
+- Application: `/opt/nexus-gateway`
+- Configuration: `/opt/nexus-gateway/config.yaml`
+- Service: `/etc/systemd/system/nexus-gateway.service`
 
-## Configurazione scope e beacon RF (branch `feature/scope-and-beacon`)
+## Scope and RF beacon configuration (branch `iw2ohx-improvements`)
 
-Questa versione introduce tre nuove funzionalità:
+This version introduces the following features:
 
-### 1. Configurazione automatica dello scope del canale
+### 1. Automatic channel scope configuration
 
-All'avvio del servizio gateway, viene impostato automaticamente lo scope sul canale Nexus tramite il comando:
+At gateway startup, the scope is automatically set on the Nexus channel using the command:
 
 ```bash
 meshcli -j -s /dev/ttyUSB0 -b 115200 scope "#it-lo"
 ```
 
-Lo scope è configurabile nel file `config.yaml`:
+The scope is configurable in `config.yaml`:
 
 ```yaml
 channel_scope: "#it-lo"
 ```
 
-Se il campo `channel_scope` non è presente, il valore di default è `#it-lo`.
+If `channel_scope` is not present, the default value is `#it-lo`.
 
-### 2. Beacon periodico via RF sul canale Nexus
+### 2. Periodic RF beacon on the Nexus channel
 
-Il gateway trasmette periodicamente un messaggio beacon via RF sul canale Nexus, utilizzando il comando:
+The gateway periodically transmits a beacon message via RF on the Nexus channel, using the command:
 
 ```bash
-meshcli -j -s /dev/ttyUSB0 -b 115200 chan 2 "testo del beacon"
+meshcli -j -s /dev/ttyUSB0 -b 115200 chan 2 "beacon text"
 ```
 
-Parametri configurabili in `config.yaml` sotto la sezione `runtime`:
+Configurable parameters in `config.yaml` under the `runtime` section:
 
 ```yaml
 runtime:
-  beacon_interval_sec: 10800    # intervallo in secondi (default: 3 ore)
-  beacon_channel: 2             # ID canale Nexus come visto dal Companion
+  beacon_interval_sec: 10800    # interval in seconds (default: 3 hours)
+  beacon_channel: 2             # Nexus channel ID as seen by the Companion
   beacon_text: "NEXUS-ITALIA Gateway XX - meshcoreitalia.it"
 ```
 
-- `beacon_interval_sec` — intervallo tra i beacon (default 10800 = 3 ore)
-- `beacon_channel` — numero del canale sul quale trasmettere il beacon (default `2`, corrispondente al canale Nexus sul Companion)
-- `beacon_text` — testo del beacon; se vuoto, il beacon è disabilitato
+- `beacon_interval_sec` — interval between beacons (default 10800 = 3 hours)
+- `beacon_channel` — channel number to transmit the beacon on (default `2`, corresponding to the Nexus channel on the Companion)
+- `beacon_text` — beacon text; if empty, the beacon is disabled
 
-### 3. Beacon iniziale 10 secondi dopo l'avvio
+### 3. Initial beacon 10 seconds after startup
 
-Oltre al beacon periodico, il gateway invia un primo beacon **10 secondi dopo lo startup**, in modo da annunciarsi immediatamente sulla rete RF dopo un riavvio o un'accensione.
+In addition to the periodic beacon, the gateway sends a first beacon **10 seconds after startup**, to announce itself immediately on the RF network after a reboot or power-on.
 
-### 4. Advert periodico (0hop e flood)
+### 4. Periodic advert (0hop and flood)
 
-Il gateway può inviare periodicamente i comandi `advert` e `floodadv` per annunciare il Companion sulla rete MeshCore:
+The gateway can periodically send `advert` and `floodadv` commands to announce the Companion on the MeshCore network:
 
-- **advert (0hop)** — annuncio locale, non propagato. Default: ogni **1 ora**.
-- **floodadv (flood)** — annuncio propagato sulla rete mesh. Default: ogni **3 ore**.
+- **advert (0hop)** — local announcement, not propagated. Default: every **1 hour**.
+- **floodadv (flood)** — announcement propagated across the mesh network. Default: every **3 hours**.
 
-Parametri configurabili in `config.yaml` sotto la sezione `runtime`:
+Configurable parameters in `config.yaml` under the `runtime` section:
 
 ```yaml
 runtime:
-  advert_enabled: true             # abilita advert 0hop
-  advert_interval_sec: 3600        # intervallo in secondi (default: 1 ora)
-  flood_advert_enabled: true       # abilita flood advert
-  flood_advert_interval_sec: 10800 # intervallo in secondi (default: 3 ore)
+  advert_enabled: true             # enable 0hop advert
+  advert_interval_sec: 3600        # interval in seconds (default: 1 hour)
+  flood_advert_enabled: true       # enable flood advert
+  flood_advert_interval_sec: 10800 # interval in seconds (default: 3 hours)
 ```
 
-Entrambi gli advert vengono inviati anche una volta all'avvio del servizio (rispettivamente a +15s e +20s dallo startup).
+Both adverts are also sent once at service startup (+15s and +20s respectively).
 
-### File modificati
+### Modified files
 
-| File | Modifica |
-|------|----------|
-| `nexus_gateway/config.py` | Aggiunti campi `channel_scope`, beacon, advert e flood advert |
-| `nexus_gateway/meshcli_adapter.py` | Aggiunti metodi `set_scope()`, `send_beacon()`, `send_advert()`, `send_flood_advert()` |
-| `nexus_gateway/service.py` | Scope allo startup, beacon/advert/flood advert in thread separati |
-| `config.example.yaml` | Documentati tutti i parametri con valori di default e nota su poll/OLED |
+| File | Change |
+|------|--------|
+| `nexus_gateway/config.py` | Added `channel_scope`, beacon, advert and flood advert fields |
+| `nexus_gateway/meshcli_adapter.py` | Added `set_scope()`, `send_beacon()`, `send_advert()`, `send_flood_advert()` methods |
+| `nexus_gateway/service.py` | Scope at startup, beacon/advert/flood advert in separate threads |
+| `config.example.yaml` | Documented all parameters with default values |
 
-### Esempio completo di configurazione beacon
+### Full beacon + advert configuration example
 
 ```yaml
 channel_scope: "#it-lo"
@@ -173,19 +173,22 @@ runtime:
   beacon_interval_sec: 10800
   beacon_channel: 2
   beacon_text: "NEXUS-ITALIA Gateway RM - meshcoreitalia.it"
+  advert_enabled: true
+  advert_interval_sec: 3600
+  flood_advert_enabled: true
+  flood_advert_interval_sec: 10800
 ```
 
 ---
 
-## Note operative
+## Operational notes
 
-Lo script aggiunge l'utente del servizio al gruppo `dialout` per l'accesso alla seriale.
-Dopo l'installazione, se il Companion non viene visto subito dal servizio, può essere utile un riavvio del Raspberry.
+The install script adds the service user to the `dialout` group for serial port access.
+After installation, if the Companion is not immediately detected by the service, a Raspberry Pi reboot may help.
 
-## Test manuali MeshCore
+## Manual MeshCore tests
 
 ```bash
-sudo -u <utente-servizio> /opt/nexus-gateway/.venv/bin/meshcli -j -s /dev/ttyUSB0 -b 115200 get_channels
-sudo -u <utente-servizio> /opt/nexus-gateway/.venv/bin/meshcli -j -s /dev/ttyUSB0 -b 115200 sync_msgs
+sudo -u <service-user> /opt/nexus-gateway/.venv/bin/meshcli -j -s /dev/ttyUSB0 -b 115200 get_channels
+sudo -u <service-user> /opt/nexus-gateway/.venv/bin/meshcli -j -s /dev/ttyUSB0 -b 115200 sync_msgs
 ```
-
