@@ -8,11 +8,9 @@ channel_number: 1
 channel_scope: "it-lo"
 protocol_version: "1.0"
 
-meshcli:
-  command: /opt/nexus-gateway/.venv/bin/meshcli
+meshcore:
   serial_port: /dev/ttyUSB0
   baudrate: 115200
-  timeout_sec: 10
   mode: serial
 
 mqtt:
@@ -35,7 +33,7 @@ runtime:
   beacon_interval_sec: 10800
   beacon_channel: 2
   beacon_text: "NEXUS-ITALIA Gateway [sigla provincia] - meshcoreitalia.it"
-  advert_enabled: true             # advert 0hop (meshcli advert)
+  advert_enabled: true             # advert 0hop
   advert_interval_sec: 3600        # ogni 1 ora
-  flood_advert_enabled: true       # flood advert (meshcli floodadv)
+  flood_advert_enabled: true       # flood advert
   flood_advert_interval_sec: 10800 # ogni 3 ore

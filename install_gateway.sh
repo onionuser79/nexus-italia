@@ -62,14 +62,8 @@ detect_serial() {
 }
 
 probe_channels() {
-  if [[ -x "$APP_DIR/.venv/bin/meshcli" ]]; then
-    log "Provo a leggere i canali MeshCore"
-    if su - "$SERVICE_USER" -c "$APP_DIR/.venv/bin/meshcli -j -s $SERIAL_PORT -b $BAUDRATE get_channels"; then
-      true
-    else
-      log "Lettura canali non riuscita ora. Continuo comunque con l'installazione."
-    fi
-  fi
+  log "Verifica del companion MeshCore non disponibile in fase di installazione."
+  log "Il gateway tenterà la connessione seriale persistente all'avvio del servizio."
 }
 
 write_config() {
@@ -84,11 +78,9 @@ write_config() {
  channel_number: $CHANNEL_NUMBER
  protocol_version: "$PROTOCOL_VERSION"
  
- meshcli:
-   command: $APP_DIR/.venv/bin/meshcli
+ meshcore:
    serial_port: $SERIAL_PORT
    baudrate: $BAUDRATE
-   timeout_sec: 10
    mode: serial
  
  mqtt:
@@ -153,9 +145,8 @@ Comandi utili:
 Config:
   $APP_DIR/config.yaml
 
-Test MeshCore:
-  sudo -u $SERVICE_USER $APP_DIR/.venv/bin/meshcli -j -s $SERIAL_PORT -b $BAUDRATE get_channels
-  sudo -u $SERVICE_USER $APP_DIR/.venv/bin/meshcli -j -s $SERIAL_PORT -b $BAUDRATE sync_msgs
+Il gateway usa una connessione seriale persistente al companion MeshCore.
+  La connessione verrà stabilita automaticamente all'avvio del servizio.
 EOF
 }
 
@@ -183,7 +174,7 @@ main() {
   prompt_default MQTT_TLS "Usare TLS (true/false)" "false"
   prompt_default DEDUPE_TTL "TTL deduplica (secondi)" "$DEFAULT_DEDUPE"
   prompt_default HEARTBEAT_INTERVAL "Intervallo heartbeat (secondi)" "$DEFAULT_HEARTBEAT"
-  prompt_default POLL_INTERVAL "Intervallo polling meshcli (secondi)" "$DEFAULT_POLL"
+  prompt_default POLL_INTERVAL "Intervallo consumer loop (secondi)" "$DEFAULT_POLL"
   write_config
   write_service
   start_service

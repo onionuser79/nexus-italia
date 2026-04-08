@@ -6,7 +6,7 @@ This repository automatically installs and configures:
 
 - System dependencies
 - Dedicated Python virtual environment
-- `meshcore-cli` inside the gateway virtualenv
+- `meshcore` Python library for persistent serial connection
 - `config.yaml` configuration file
 - `systemd` service `nexus-gateway`
 - Automatic start at boot
@@ -86,15 +86,27 @@ sudo systemctl restart nexus-gateway
 
 ---
 
+## Architecture
+
+### Persistent serial connection
+
+The gateway maintains a **persistent serial connection** to the MeshCore USB Companion using the `meshcore` Python library. This replaces the previous approach of spawning `meshcli` subprocesses for each operation, which caused the Companion display to turn on at every poll cycle.
+
+Key benefits:
+- Serial port is opened **once** at startup and kept open for the lifetime of the service
+- Incoming channel messages are received via **event subscription** (no repeated polling)
+- The Companion display is no longer activated by routine gateway operations
+- All gateway operations (sending, adverts, stats) use the same persistent connection
+
+The gateway uses Python `asyncio` for all concurrent operations (heartbeat, beacons, adverts, message consumption).
+
+---
+
 ## Advanced features
 
 ### 1. Automatic channel scope configuration
 
-At gateway startup, the scope is automatically set on the Nexus channel using:
-
-```bash
-meshcli -j -s /dev/ttyUSB0 -b 115200 scope "it-lo"
-```
+At gateway startup, the scope is automatically set on the Nexus channel via the persistent serial connection.
 
 Configurable in `config.yaml`:
 
@@ -108,17 +120,13 @@ If `channel_scope` is not present, the default value is `it-lo`.
 
 ### 2. Companion reboot detection
 
-The scope setting is lost if the Companion device reboots (power loss, USB disconnect, etc.). The gateway automatically detects reboots by monitoring the Companion uptime via `meshcli stats-core` before each poll cycle. If a reboot is detected (uptime decreases compared to the previous reading), the scope is re-applied immediately before any messages are polled.
+The scope setting is lost if the Companion device reboots (power loss, USB disconnect, etc.). The gateway automatically detects reboots by monitoring the Companion uptime via `get_stats_core()` on the persistent connection. If a reboot is detected (uptime decreases compared to the previous reading), the scope is re-applied immediately.
 
 This ensures messages are never sent without scope on the mesh, even after unexpected Companion restarts.
 
 ### 3. Periodic RF beacon on the Nexus channel
 
-The gateway periodically transmits a beacon message via RF on the Nexus channel using:
-
-```bash
-meshcli -j -s /dev/ttyUSB0 -b 115200 chan 2 "beacon text"
-```
+The gateway periodically transmits a beacon message via RF on the Nexus channel.
 
 Configurable parameters in `config.yaml` under `runtime`:
 
@@ -137,7 +145,7 @@ An initial beacon is also sent **10 seconds after startup**, to announce the gat
 
 ### 4. Periodic advert (0hop and flood)
 
-The gateway can periodically send `advert` and `floodadv` commands to announce the Companion on the MeshCore network:
+The gateway can periodically send advert commands to announce the Companion on the MeshCore network:
 
 - **advert (0hop)** — local announcement, not propagated. Default: every **1 hour**.
 - **floodadv (flood)** — announcement propagated across the mesh network. Default: every **3 hours**.
@@ -157,7 +165,32 @@ Both adverts are also sent once at service startup (+15s and +20s respectively).
 ### Full configuration example
 
 ```yaml
+gateway_id: NEXUS-ITALIA-MI
+site_name: "NEXUS-ITALIA Milano"
+region: lombardia
+mesh_id: mesh-mi
+radio_band: "868"
+channel_name: NEXUS
+channel_number: 1
 channel_scope: "it-lo"
+protocol_version: "1.0"
+
+meshcore:
+  serial_port: /dev/ttyUSB0
+  baudrate: 115200
+  mode: serial
+
+mqtt:
+  host: nexus.meshcoreitalia.it
+  port: 1883
+  username: NEXUS-ITALIA-MI
+  password: your_password
+  keepalive: 30
+  tls: false
+  uplink_topic: nexus/v1/uplink
+  downlink_topic: nexus/v1/downlink/NEXUS-ITALIA-MI
+  heartbeat_topic: nexus/v1/heartbeat/NEXUS-ITALIA-MI
+  status_topic: nexus/v1/status/NEXUS-ITALIA-MI
 
 runtime:
   dedupe_ttl_sec: 180
@@ -180,9 +213,15 @@ runtime:
 The install script adds the service user to the `dialout` group for serial port access.
 After installation, if the Companion is not immediately detected by the service, a Raspberry Pi reboot may help.
 
-## Manual MeshCore tests
+## Upgrading from meshcli-based versions
 
-```bash
-sudo -u <service-user> /opt/nexus-gateway/.venv/bin/meshcli -j -s /dev/ttyUSB0 -b 115200 get_channels
-sudo -u <service-user> /opt/nexus-gateway/.venv/bin/meshcli -j -s /dev/ttyUSB0 -b 115200 sync_msgs
-```
+If you are upgrading from a previous version that used `meshcli` subprocesses:
+
+1. Update the gateway files: `cd nexus-italia && git pull`
+2. Re-run the installer or manually update the venv:
+   ```bash
+   cd /opt/nexus-gateway
+   sudo -u <service-user> .venv/bin/pip install -r requirements.txt
+   ```
+3. Update `config.yaml`: rename the `meshcli:` section to `meshcore:` and remove the `command` and `timeout_sec` fields (the gateway also accepts the old `meshcli:` key for backward compatibility)
+4. Restart the service: `sudo systemctl restart nexus-gateway`
