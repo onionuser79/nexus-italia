@@ -230,6 +230,19 @@ runtime:
 
 ---
 
+## Software versioning
+
+The gateway includes a software version number (`__version__` in `nexus_gateway/__init__.py`), separate from the MQTT `protocol_version` defined in `config.yaml`.
+
+Both values are included in heartbeat payloads:
+
+- `protocol_version` — MQTT message format version (from config, e.g. `"1.0"`)
+- `software_version` — gateway software release (from code, e.g. `"2.0.0"`)
+
+This allows tracking which software version is deployed on each gateway node.
+
+---
+
 ## Operational notes
 
 The install script adds the service user to the `dialout` group for serial port access.
