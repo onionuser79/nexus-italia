@@ -66,7 +66,7 @@ class MeshCoreAdapter:
             payload = {"text": payload}
         # Filter: only relay messages from the configured Nexus channel
         msg_chan = payload.get("channel") or payload.get("chan")
-        if msg_chan is not None and int(msg_chan) != self.config.channel_number:
+        if msg_chan is None or int(msg_chan) != self.config.channel_number:
             logger.debug(
                 "ignoring message from non-nexus channel",
                 extra={"extra": {
