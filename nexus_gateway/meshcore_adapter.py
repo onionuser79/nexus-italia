@@ -120,7 +120,7 @@ class MeshCoreAdapter:
 
     async def sync_clock(self) -> None:
         assert self._mc is not None
-        await self._mc.commands.sync_time()
+        await self._mc.commands.set_time()
         logger.info("companion clock synced")
 
     async def set_scope(self, scope: str) -> None:
