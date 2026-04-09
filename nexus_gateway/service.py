@@ -32,6 +32,7 @@ class GatewayService:
         self._install_signal_handlers()
 
         await self.meshcore.connect()
+        await self.meshcore.sync_clock()
         await self._configure_scope()
 
         self.mqtt.connect()
@@ -148,6 +149,7 @@ class GatewayService:
                             "new_uptime": uptime,
                         }},
                     )
+                    await self.meshcore.sync_clock()
                     await self._configure_scope()
                 self._last_companion_uptime = uptime
             except Exception as exc:

@@ -64,6 +64,17 @@ class MeshCoreAdapter:
         payload = event.payload if hasattr(event, "payload") else {}
         if isinstance(payload, str):
             payload = {"text": payload}
+        # Filter: only relay messages from the configured Nexus channel
+        msg_chan = payload.get("channel") or payload.get("chan")
+        if msg_chan is not None and int(msg_chan) != self.config.channel_number:
+            logger.debug(
+                "ignoring message from non-nexus channel",
+                extra={"extra": {
+                    "msg_channel": msg_chan,
+                    "nexus_channel": self.config.channel_number,
+                }},
+            )
+            return
         await self._msg_queue.put(payload)
 
     async def get_pending_messages(self) -> List[Dict[str, Any]]:
@@ -106,6 +117,11 @@ class MeshCoreAdapter:
         if isinstance(data, dict):
             return int(data.get("uptime_secs", data.get("uptime", 0)))
         return 0
+
+    async def sync_clock(self) -> None:
+        assert self._mc is not None
+        await self._mc.commands.sync_time()
+        logger.info("companion clock synced")
 
     async def set_scope(self, scope: str) -> None:
         assert self._mc is not None
