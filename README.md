@@ -132,21 +132,37 @@ If `channel_scope` is not present, the default value is `it-lo`.
 
 > **Note:** Starting from meshcore_py v2.3.5, the scope should be set as `it-lo` without the `#` prefix, matching the app convention. The `#` was removed to avoid confusion with channel names that also start with `#`. (Credit: Armando Accardo)
 
-### 2. Nexus channel filtering
+### 2. Automatic Nexus channel provisioning
+
+At startup, the gateway checks whether the Nexus private channel exists on the Companion at the configured `channel_number`. If the channel is missing or has a different name, the gateway automatically creates it using the secret key from `config.yaml`. This removes the need to manually configure the channel via the MeshCore app before first use.
+
+The check also runs after a **Companion reboot** is detected, so the channel is re-created if the device loses its configuration.
+
+Configurable in `config.yaml`:
+
+```yaml
+channel_name: NEXUS
+channel_number: 1
+channel_secret: "a45768ab48e203498edbc11b35cdfbd7"  # 32-char hex = 16 bytes
+```
+
+- `channel_secret` — the Nexus channel secret key as a 32-character hex string. If omitted or empty, the auto-provisioning is skipped (backward compatible with existing deployments where the channel was created manually).
+
+### 3. Nexus channel filtering
 
 The gateway only relays messages from the configured **Nexus channel** (`channel_number` in `config.yaml`). Messages received from the Public channel or any other channel are silently discarded. This ensures only Nexus traffic is bridged over MQTT, preventing unrelated mesh traffic from leaking to the Internet.
 
-### 3. Companion clock sync
+### 4. Companion clock sync
 
 At startup, the gateway synchronizes the Companion's clock via `sync_time()`. This ensures accurate timestamps on all messages from the first moment the gateway is online.
 
-### 4. Companion reboot detection
+### 5. Companion reboot detection
 
-The scope setting and clock are lost if the Companion device reboots (power loss, USB disconnect, etc.). The gateway automatically detects reboots by monitoring the Companion uptime via `get_stats_core()` on the persistent connection. If a reboot is detected (uptime decreases compared to the previous reading), the clock is re-synced and the scope is re-applied immediately.
+The scope setting, clock, and channel configuration are lost if the Companion device reboots (power loss, USB disconnect, etc.). The gateway automatically detects reboots by monitoring the Companion uptime via `get_stats_core()` on the persistent connection. If a reboot is detected (uptime decreases compared to the previous reading), the clock is re-synced, the Nexus channel is re-provisioned, and the scope is re-applied immediately.
 
-This ensures messages are never sent without scope on the mesh and the Companion clock is always accurate, even after unexpected restarts.
+This ensures messages are never sent without scope on the mesh, the Nexus channel is always present, and the Companion clock is always accurate, even after unexpected restarts.
 
-### 5. Periodic RF beacon on the Nexus channel
+### 6. Periodic RF beacon on the Nexus channel
 
 The gateway periodically transmits a beacon message via RF on the Nexus channel.
 
@@ -165,7 +181,7 @@ runtime:
 
 An initial beacon is also sent **10 seconds after startup**, to announce the gateway immediately on the RF network after a reboot.
 
-### 6. Periodic advert (0hop and flood)
+### 7. Periodic advert (0hop and flood)
 
 The gateway can periodically send advert commands to announce the Companion on the MeshCore network:
 
@@ -195,6 +211,7 @@ radio_band: "868"
 channel_name: NEXUS
 channel_number: 1
 channel_scope: "it-lo"
+channel_secret: "a45768ab48e203498edbc11b35cdfbd7"
 protocol_version: "1.0"
 
 meshcore:

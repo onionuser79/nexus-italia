@@ -61,11 +61,20 @@ class MeshCoreAdapter:
             logger.info("companion disconnected")
 
     async def _on_channel_message(self, event: Any) -> None:
-        payload = event.payload if hasattr(event, "payload") else {}
-        if isinstance(payload, str):
-            payload = {"text": payload}
+        raw = event.payload if hasattr(event, "payload") else {}
+        logger.debug(
+            "raw channel message received",
+            extra={"extra": {"raw_payload": raw, "raw_type": type(raw).__name__}},
+        )
+        if isinstance(raw, str):
+            raw = {"text": raw}
         # Filter: only relay messages from the configured Nexus channel
-        msg_chan = payload.get("channel") or payload.get("chan")
+        # Use explicit None checks — channel_idx 0 (Public) is falsy but valid
+        msg_chan = raw.get("channel_idx")
+        if msg_chan is None:
+            msg_chan = raw.get("channel")
+        if msg_chan is None:
+            msg_chan = raw.get("chan")
         if msg_chan is None or int(msg_chan) != self.config.channel_number:
             logger.debug(
                 "ignoring message from non-nexus channel",
@@ -75,7 +84,7 @@ class MeshCoreAdapter:
                 }},
             )
             return
-        await self._msg_queue.put(payload)
+        await self._msg_queue.put(raw)
 
     async def get_pending_messages(self) -> List[Dict[str, Any]]:
         messages: List[Dict[str, Any]] = []
@@ -85,6 +94,41 @@ class MeshCoreAdapter:
             except asyncio.QueueEmpty:
                 break
         return messages
+
+    async def ensure_channel(
+        self, channel_idx: int, name: str, secret_hex: str
+    ) -> None:
+        """Check that the Nexus channel exists on the companion; create it if not."""
+        assert self._mc is not None
+        try:
+            result = await self._mc.commands.get_channel(channel_idx=channel_idx)
+            info = result.payload if hasattr(result, "payload") else {}
+            existing_name = ""
+            if isinstance(info, dict):
+                existing_name = str(
+                    info.get("name") or info.get("channel_name") or ""
+                ).strip().rstrip("\x00")
+            if existing_name and existing_name.upper() == name.upper():
+                logger.info(
+                    "nexus channel already present on companion",
+                    extra={"extra": {
+                        "channel_idx": channel_idx,
+                        "name": existing_name,
+                    }},
+                )
+                return
+        except Exception as exc:
+            logger.warning(
+                "could not read channel from companion, will attempt creation",
+                extra={"extra": {"channel_idx": channel_idx, "error": str(exc)}},
+            )
+
+        secret_bytes = bytes.fromhex(secret_hex)
+        await self._mc.commands.set_channel(channel_idx, name, secret_bytes)
+        logger.info(
+            "nexus channel created on companion",
+            extra={"extra": {"channel_idx": channel_idx, "name": name}},
+        )
 
     async def send_channel_message(self, text: str) -> None:
         assert self._mc is not None

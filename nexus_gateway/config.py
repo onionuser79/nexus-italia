@@ -51,6 +51,7 @@ class GatewayConfig:
     channel_name: str
     channel_number: int
     channel_scope: str
+    channel_secret: str
     protocol_version: str
     meshcore: MeshCoreConfig
     mqtt: MqttConfig
@@ -69,6 +70,7 @@ def load_config(path: str | Path) -> GatewayConfig:
         channel_name=data["channel_name"],
         channel_number=int(data["channel_number"]),
         channel_scope=str(data.get("channel_scope", "it-lo")),
+        channel_secret=str(data.get("channel_secret", "")),
         protocol_version=str(data["protocol_version"]),
         meshcore=MeshCoreConfig(
             serial_port=meshcore_data["serial_port"],

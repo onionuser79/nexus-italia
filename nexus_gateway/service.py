@@ -34,6 +34,7 @@ class GatewayService:
 
         await self.meshcore.connect()
         await self.meshcore.sync_clock()
+        await self._ensure_nexus_channel()
         await self._configure_scope()
 
         self.mqtt.connect()
@@ -89,6 +90,21 @@ class GatewayService:
     def _signal_handler(self, signum: int, frame: object) -> None:
         logger.info("shutdown requested", extra={"extra": {"signal": signum}})
         self.stop_event.set()
+
+    async def _ensure_nexus_channel(self) -> None:
+        if not self.config.channel_secret:
+            return
+        try:
+            await self.meshcore.ensure_channel(
+                self.config.channel_number,
+                self.config.channel_name,
+                self.config.channel_secret,
+            )
+        except Exception as exc:
+            logger.exception(
+                "failed to ensure nexus channel on companion",
+                extra={"extra": {"error": str(exc)}},
+            )
 
     async def _configure_scope(self) -> None:
         scope = self.config.channel_scope
@@ -151,6 +167,7 @@ class GatewayService:
                         }},
                     )
                     await self.meshcore.sync_clock()
+                    await self._ensure_nexus_channel()
                     await self._configure_scope()
                 self._last_companion_uptime = uptime
             except Exception as exc:
