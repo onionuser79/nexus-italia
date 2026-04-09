@@ -5,6 +5,7 @@ import logging
 import signal
 from datetime import datetime, timezone
 
+from . import __version__
 from .config import GatewayConfig
 from .dedupe import TTLCache
 from .meshcore_adapter import MeshCoreAdapter
@@ -248,7 +249,8 @@ class GatewayService:
             "status": "online",
             "serial_port": self.config.meshcore.serial_port,
             "last_seen_utc": datetime.now(timezone.utc).isoformat(),
-            "software_version": self.config.protocol_version,
+            "protocol_version": self.config.protocol_version,
+            "software_version": __version__,
         }
         self.mqtt.publish_json(self.config.mqtt.heartbeat_topic, payload)
 
