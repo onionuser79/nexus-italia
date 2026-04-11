@@ -173,6 +173,11 @@ class MeshCoreAdapter:
         await self._mc.commands.set_flood_scope(scope)
         logger.info("channel scope set", extra={"extra": {"scope": scope}})
 
+    async def set_path_hash_mode(self, mode: int = 1) -> None:
+        assert self._mc is not None
+        await self._mc.commands.set_path_hash_mode(mode)
+        logger.info("path hash mode set", extra={"extra": {"mode": mode}})
+
     async def get_channels(self) -> List[Dict[str, Any]]:
         assert self._mc is not None
         channels: List[Dict[str, Any]] = []

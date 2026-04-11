@@ -156,13 +156,23 @@ The gateway only relays messages from the configured **Nexus channel** (`channel
 
 At startup, the gateway synchronizes the Companion's clock via `sync_time()`. This ensures accurate timestamps on all messages from the first moment the gateway is online.
 
-### 5. Companion reboot detection
+### 5. Path hash mode configuration
 
-The scope setting, clock, and channel configuration are lost if the Companion device reboots (power loss, USB disconnect, etc.). The gateway automatically detects reboots by monitoring the Companion uptime via `get_stats_core()` on the persistent connection. If a reboot is detected (uptime decreases compared to the previous reading), the clock is re-synced, the Nexus channel is re-provisioned, and the scope is re-applied immediately.
+At startup, the gateway sets `path.hash.mode` to **1** (2-byte hash) on the Companion. This controls the low-level ID/hash encoding size used during repeater adverts:
 
-This ensures messages are never sent without scope on the mesh, the Nexus channel is always present, and the Companion clock is always accurate, even after unexpected restarts.
+- Mode 0: 1-byte hash (256 unique IDs, 64 max flood)
+- **Mode 1: 2-byte hash (65,536 unique IDs, 32 max flood)** — default
+- Mode 2: 3-byte hash (16,777,216 unique IDs, 21 max flood)
 
-### 6. Periodic RF beacon on the Nexus channel
+Mode 1 is the recommended setting for networks running MeshCore firmware >= 1.14. The setting is applied automatically and re-applied after Companion reboot detection.
+
+### 6. Companion reboot detection
+
+The scope setting, clock, channel configuration, and path hash mode are lost if the Companion device reboots (power loss, USB disconnect, etc.). The gateway automatically detects reboots by monitoring the Companion uptime via `get_stats_core()` on the persistent connection. If a reboot is detected (uptime decreases compared to the previous reading), the clock is re-synced, the Nexus channel is re-provisioned, the scope is re-applied, and the path hash mode is re-set immediately.
+
+This ensures messages are never sent without scope on the mesh, the Nexus channel is always present, the Companion clock is always accurate, and the path hash mode is correctly configured, even after unexpected restarts.
+
+### 7. Periodic RF beacon on the Nexus channel
 
 The gateway periodically transmits a beacon message via RF on the Nexus channel.
 
@@ -181,7 +191,7 @@ runtime:
 
 An initial beacon is also sent **10 seconds after startup**, to announce the gateway immediately on the RF network after a reboot.
 
-### 7. Periodic advert (0hop and flood)
+### 8. Periodic advert (0hop and flood)
 
 The gateway can periodically send advert commands to announce the Companion on the MeshCore network:
 
