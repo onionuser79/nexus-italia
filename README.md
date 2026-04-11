@@ -158,13 +158,21 @@ At startup, the gateway synchronizes the Companion's clock via `sync_time()`. Th
 
 ### 5. Path hash mode configuration
 
-At startup, the gateway sets `path.hash.mode` to **1** (2-byte hash) on the Companion. This controls the low-level ID/hash encoding size used during repeater adverts:
+At startup, the gateway configures `path.hash.mode` on the Companion. This controls the low-level ID/hash encoding size used during repeater adverts:
 
 - Mode 0: 1-byte hash (256 unique IDs, 64 max flood)
 - **Mode 1: 2-byte hash (65,536 unique IDs, 32 max flood)** — default
 - Mode 2: 3-byte hash (16,777,216 unique IDs, 21 max flood)
 
 Mode 1 is the recommended setting for networks running MeshCore firmware >= 1.14. The setting is applied automatically and re-applied after Companion reboot detection.
+
+Configurable in `config.yaml`:
+
+```yaml
+path_hash_mode: 1  # 0=1byte, 1=2byte (default), 2=3byte
+```
+
+If `path_hash_mode` is not present in the config, the default value is `1`.
 
 ### 6. Companion reboot detection
 
@@ -222,6 +230,7 @@ channel_name: NEXUS
 channel_number: 1
 channel_scope: "it-lo"
 channel_secret: "a45768ab48e203498edbc11b35cdfbd7"
+path_hash_mode: 1  # 0=1byte, 1=2byte (default), 2=3byte
 protocol_version: "1.0"
 
 meshcore:

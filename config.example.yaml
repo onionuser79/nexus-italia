@@ -7,6 +7,7 @@ channel_name: NEXUS
 channel_number: 1
 channel_scope: "it-lo"
 channel_secret: "a45768ab48e203498edbc11b35cdfbd7"  # 32-char hex = 16 bytes key
+path_hash_mode: 1  # 0=1byte(256 IDs), 1=2byte(65536 IDs), 2=3byte(16M IDs)
 protocol_version: "1.0"
 
 meshcore:

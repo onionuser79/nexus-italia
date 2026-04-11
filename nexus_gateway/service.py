@@ -36,7 +36,7 @@ class GatewayService:
         await self.meshcore.sync_clock()
         await self._ensure_nexus_channel()
         await self._configure_scope()
-        await self.meshcore.set_path_hash_mode()
+        await self.meshcore.set_path_hash_mode(self.config.path_hash_mode)
 
         self.mqtt.connect()
         self.publish_status("online")
