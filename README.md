@@ -1,4 +1,4 @@
-# NEXUS-ITALIA Gateway Installer
+# NEXUS-ITALIA Gateway
 
 Automated installer for the **NEXUS-ITALIA** gateway based on Raspberry Pi Zero 2W and a MeshCore USB Companion.
 
@@ -33,7 +33,7 @@ Clone the repository and run the script as root:
 ```bash
 sudo apt update
 sudo apt install -y git
-git clone https://github.com/xpinguinx/nexus-italia.git
+git clone https://github.com/onionuser79/nexus-italia-fork.git nexus-italia
 cd nexus-italia
 sudo bash install_gateway.sh
 ```
@@ -63,40 +63,26 @@ Working configuration already verified:
 Service status:
 
 ```bash
-sudo systemctl status nexus-gateway-v2 --no-pager
+sudo systemctl status nexus-gateway --no-pager
 ```
 
 Live logs:
 
 ```bash
-journalctl -u nexus-gateway-v2 -f
+journalctl -u nexus-gateway -f
 ```
 
 Restart:
 
 ```bash
-sudo systemctl restart nexus-gateway-v2
-```
-
-### Switching between v1 and v2
-
-```bash
-# Switch to v2 (persistent serial)
-sudo systemctl stop nexus-gateway
-sudo systemctl start nexus-gateway-v2
-
-# Switch back to v1 (meshcli subprocess)
-sudo systemctl stop nexus-gateway-v2
-sudo systemctl start nexus-gateway
+sudo systemctl restart nexus-gateway
 ```
 
 ## Installed paths
 
-- Application: `/opt/nexus-gateway-v2`
-- Configuration: `/opt/nexus-gateway-v2/config.yaml`
-- Service: `/etc/systemd/system/nexus-gateway-v2.service`
-
-> **Note:** This version installs alongside the previous v1 (`/opt/nexus-gateway`) without conflicts. Both have independent venvs and systemd services. Only one should be running at a time since they share the same serial port.
+- Application: `/opt/nexus-gateway`
+- Configuration: `/opt/nexus-gateway/config.yaml`
+- Service: `/etc/systemd/system/nexus-gateway.service`
 
 ---
 
@@ -273,7 +259,7 @@ The gateway includes a software version number (`__version__` in `nexus_gateway/
 Both values are included in heartbeat payloads:
 
 - `protocol_version` — MQTT message format version (from config, e.g. `"1.0"`)
-- `software_version` — gateway software release (from code, e.g. `"2.0.0"`)
+- `software_version` — gateway software release (from code, e.g. `"2.0"`)
 
 This allows tracking which software version is deployed on each gateway node.
 
@@ -283,9 +269,3 @@ This allows tracking which software version is deployed on each gateway node.
 
 The install script adds the service user to the `dialout` group for serial port access.
 After installation, if the Companion is not immediately detected by the service, a Raspberry Pi reboot may help.
-
-## Coexistence with v1
-
-This version (v2) installs to `/opt/nexus-gateway-v2` with its own venv and systemd service (`nexus-gateway-v2`). The previous v1 installation at `/opt/nexus-gateway` remains untouched.
-
-**Important:** Both versions use the same serial port to the Companion. Only run one at a time — stop one before starting the other.
