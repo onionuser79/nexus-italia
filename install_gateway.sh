@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_DIR="/opt/nexus-gateway"
-SERVICE_FILE="/etc/systemd/system/nexus-gateway.service"
+APP_DIR="/opt/nexus-gateway-v2"
+SERVICE_NAME="nexus-gateway-v2"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 DEFAULT_BAUD="115200"
 DEFAULT_POLL="5"
 DEFAULT_HEARTBEAT="30"
@@ -62,14 +63,8 @@ detect_serial() {
 }
 
 probe_channels() {
-  if [[ -x "$APP_DIR/.venv/bin/meshcli" ]]; then
-    log "Provo a leggere i canali MeshCore"
-    if su - "$SERVICE_USER" -c "$APP_DIR/.venv/bin/meshcli -j -s $SERIAL_PORT -b $BAUDRATE get_channels"; then
-      true
-    else
-      log "Lettura canali non riuscita ora. Continuo comunque con l'installazione."
-    fi
-  fi
+  log "Verifica del companion MeshCore non disponibile in fase di installazione."
+  log "Il gateway tenterà la connessione seriale persistente all'avvio del servizio."
 }
 
 write_config() {
@@ -84,11 +79,9 @@ write_config() {
  channel_number: $CHANNEL_NUMBER
  protocol_version: "$PROTOCOL_VERSION"
  
- meshcli:
-   command: $APP_DIR/.venv/bin/meshcli
+ meshcore:
    serial_port: $SERIAL_PORT
    baudrate: $BAUDRATE
-   timeout_sec: 10
    mode: serial
  
  mqtt:
@@ -131,13 +124,13 @@ configure_user_access() {
 }
 
 write_service() {
-  sed "s/__SERVICE_USER__/$SERVICE_USER/g" systemd/nexus-gateway.service > "$SERVICE_FILE"
+  sed "s/__SERVICE_USER__/$SERVICE_USER/g" systemd/nexus-gateway-v2.service > "$SERVICE_FILE"
   systemctl daemon-reload
 }
 
 start_service() {
-  systemctl enable nexus-gateway
-  systemctl restart nexus-gateway
+  systemctl enable "$SERVICE_NAME"
+  systemctl restart "$SERVICE_NAME"
 }
 
 print_summary() {
@@ -146,16 +139,23 @@ print_summary() {
 Installazione completata.
 
 Comandi utili:
-  sudo systemctl status nexus-gateway --no-pager
-  journalctl -u nexus-gateway -f
-  sudo systemctl restart nexus-gateway
+  sudo systemctl status $SERVICE_NAME --no-pager
+  journalctl -u $SERVICE_NAME -f
+  sudo systemctl restart $SERVICE_NAME
 
 Config:
   $APP_DIR/config.yaml
 
-Test MeshCore:
-  sudo -u $SERVICE_USER $APP_DIR/.venv/bin/meshcli -j -s $SERIAL_PORT -b $BAUDRATE get_channels
-  sudo -u $SERVICE_USER $APP_DIR/.venv/bin/meshcli -j -s $SERIAL_PORT -b $BAUDRATE sync_msgs
+Il gateway usa una connessione seriale persistente al companion MeshCore.
+La connessione verrà stabilita automaticamente all'avvio del servizio.
+
+NOTA: Questa installazione (v2) è indipendente dalla v1 in /opt/nexus-gateway.
+  Per passare dalla v1 alla v2:
+    sudo systemctl stop nexus-gateway
+    sudo systemctl start $SERVICE_NAME
+  Per tornare alla v1:
+    sudo systemctl stop $SERVICE_NAME
+    sudo systemctl start nexus-gateway
 EOF
 }
 
@@ -183,7 +183,7 @@ main() {
   prompt_default MQTT_TLS "Usare TLS (true/false)" "false"
   prompt_default DEDUPE_TTL "TTL deduplica (secondi)" "$DEFAULT_DEDUPE"
   prompt_default HEARTBEAT_INTERVAL "Intervallo heartbeat (secondi)" "$DEFAULT_HEARTBEAT"
-  prompt_default POLL_INTERVAL "Intervallo polling meshcli (secondi)" "$DEFAULT_POLL"
+  prompt_default POLL_INTERVAL "Intervallo consumer loop (secondi)" "$DEFAULT_POLL"
   write_config
   write_service
   start_service

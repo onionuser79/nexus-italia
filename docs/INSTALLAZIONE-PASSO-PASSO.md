@@ -53,8 +53,10 @@ mosquitto_sub -h 127.0.0.1 -p 1883 -u router -P 'ROUTER_PASSWORD' -t 'nexus/v1/#
 
 ## 7. Local radio test
 
-On the Raspberry Pi:
+The gateway uses a persistent serial connection to the Companion. To verify messages are flowing, check the service logs:
 
 ```bash
-sudo -u <service-user> /opt/nexus-gateway/.venv/bin/meshcli -j -s /dev/ttyUSB0 -b 115200 chan 1 "test nexus"
+journalctl -u nexus-gateway -f | grep "uplink published"
 ```
+
+Send a test message from another MeshCore node on the NEXUS channel and verify it appears in the logs and on the MQTT broker.

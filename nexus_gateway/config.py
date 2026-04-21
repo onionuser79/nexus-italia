@@ -6,11 +6,9 @@ import yaml
 
 
 @dataclass
-class MeshCliConfig:
-    command: str
+class MeshCoreConfig:
     serial_port: str
     baudrate: int
-    timeout_sec: int
     mode: str = "serial"
 
 
@@ -53,14 +51,17 @@ class GatewayConfig:
     channel_name: str
     channel_number: int
     channel_scope: str
+    channel_secret: str
+    path_hash_mode: int
     protocol_version: str
-    meshcli: MeshCliConfig
+    meshcore: MeshCoreConfig
     mqtt: MqttConfig
     runtime: RuntimeConfig
 
 
 def load_config(path: str | Path) -> GatewayConfig:
     data = yaml.safe_load(Path(path).read_text())
+    meshcore_data = data.get("meshcore", data.get("meshcli", {}))
     return GatewayConfig(
         gateway_id=data["gateway_id"],
         site_name=data["site_name"],
@@ -70,8 +71,14 @@ def load_config(path: str | Path) -> GatewayConfig:
         channel_name=data["channel_name"],
         channel_number=int(data["channel_number"]),
         channel_scope=str(data.get("channel_scope", "it-lo")),
+        channel_secret=str(data.get("channel_secret", "")),
+        path_hash_mode=int(data.get("path_hash_mode", 1)),
         protocol_version=str(data["protocol_version"]),
-        meshcli=MeshCliConfig(**data["meshcli"]),
+        meshcore=MeshCoreConfig(
+            serial_port=meshcore_data["serial_port"],
+            baudrate=int(meshcore_data["baudrate"]),
+            mode=str(meshcore_data.get("mode", "serial")),
+        ),
         mqtt=MqttConfig(**data["mqtt"]),
         runtime=RuntimeConfig(
             dedupe_ttl_sec=data["runtime"]["dedupe_ttl_sec"],
