@@ -33,7 +33,7 @@ Clone the repository and run the script as root:
 ```bash
 sudo apt update
 sudo apt install -y git
-git clone https://github.com/onionuser79/nexus-italia-fork.git nexus-italia
+git clone https://github.com/onionuser79/nexus-italia.git nexus-italia
 cd nexus-italia
 sudo bash install_gateway.sh
 ```
@@ -111,12 +111,12 @@ At gateway startup, the scope is automatically set on the Nexus channel via the 
 Configurable in `config.yaml`:
 
 ```yaml
-channel_scope: "it-lo"
+channel_scope: "it-lom-mi"
 ```
 
-If `channel_scope` is not present, the default value is `it-lo`.
+If `channel_scope` is not present, the default value is `it-lom-mi`.
 
-> **Note:** Starting from meshcore_py v2.3.5, the scope should be set as `it-lo` without the `#` prefix, matching the app convention. The `#` was removed to avoid confusion with channel names that also start with `#`. (Credit: Armando Accardo)
+> **Note:** Starting from meshcore_py v2.3.5, the scope should be set without the `#` prefix (e.g. `it-lom-mi`, not `#it-lom-mi`), matching the app convention. The `#` was removed to avoid confusion with channel names that also start with `#`. (Credit: Armando Accardo IK2XYP)
 
 ### 2. Automatic Nexus channel provisioning
 
@@ -162,9 +162,15 @@ If `path_hash_mode` is not present in the config, the default value is `1`.
 
 ### 6. Companion reboot detection
 
-The scope setting, clock, channel configuration, and path hash mode are lost if the Companion device reboots (power loss, USB disconnect, etc.). The gateway automatically detects reboots by monitoring the Companion uptime via `get_stats_core()` on the persistent connection. If a reboot is detected (uptime decreases compared to the previous reading), the clock is re-synced, the Nexus channel is re-provisioned, the scope is re-applied, and the path hash mode is re-set immediately.
+The scope settings, clock, channel configuration, and path hash mode are lost if the Companion device reboots (power loss, USB disconnect, etc.). The gateway automatically detects reboots by monitoring the Companion uptime via `get_stats_core()` on the persistent connection. If a reboot is detected (uptime decreases compared to the previous reading), the following are re-applied immediately in order:
 
-This ensures messages are never sent without scope on the mesh, the Nexus channel is always present, the Companion clock is always accurate, and the path hash mode is correctly configured, even after unexpected restarts.
+1. Clock sync
+2. Nexus channel provisioning
+3. Channel flood scope (`set_flood_scope`)
+4. Default flood scope (`set_default_flood_scope`)
+5. Path hash mode
+
+This ensures messages are never sent without scope on the mesh, the Nexus channel is always present, the Companion clock is always accurate, and both scope settings and path hash mode are correctly configured, even after unexpected restarts.
 
 ### 7. Periodic RF beacon on the Nexus channel
 
@@ -204,6 +210,22 @@ runtime:
 
 Both adverts are also sent once at service startup (+15s and +20s respectively).
 
+### 9. Default flood scope configuration
+
+Starting from **meshcore >= 2.3.7**, the gateway also sets a **default flood scope** on the Companion at startup via `set_default_flood_scope()`. This is distinct from the per-channel flood scope set by `set_flood_scope()` (feature 1 above): the default scope applies as the device-level fallback for any channel that does not have an explicit scope configured.
+
+Both the channel scope and the default scope use the same `channel_scope` value from `config.yaml`:
+
+```yaml
+channel_scope: "it-lom-mi"
+```
+
+The default flood scope is applied:
+- At gateway startup, after the channel scope is set
+- After a Companion reboot is detected (same re-apply sequence as all other settings)
+
+This feature requires `meshcore >= 2.3.7` and `meshcore-cli >= 1.5.7`. (Credit: Armando Accardo IK2XYP)
+
 ### Full configuration example
 
 ```yaml
@@ -214,7 +236,7 @@ mesh_id: mesh-mi
 radio_band: "868"
 channel_name: NEXUS
 channel_number: 1
-channel_scope: "it-lo"
+channel_scope: "it-lom-mi"
 channel_secret: "a45768ab48e203498edbc11b35cdfbd7"
 path_hash_mode: 1  # 0=1byte, 1=2byte (default), 2=3byte
 protocol_version: "1.0"
@@ -259,7 +281,7 @@ The gateway includes a software version number (`__version__` in `nexus_gateway/
 Both values are included in heartbeat payloads:
 
 - `protocol_version` — MQTT message format version (from config, e.g. `"1.0"`)
-- `software_version` — gateway software release (from code, e.g. `"2.0"`)
+- `software_version` — gateway software release (from code, e.g. `"2.1.0"`)
 
 This allows tracking which software version is deployed on each gateway node.
 
