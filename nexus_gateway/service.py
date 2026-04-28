@@ -36,6 +36,7 @@ class GatewayService:
         await self.meshcore.sync_clock()
         await self._ensure_nexus_channel()
         await self._configure_scope()
+        await self._configure_default_scope()
         await self.meshcore.set_path_hash_mode(self.config.path_hash_mode)
 
         self.mqtt.connect()
@@ -120,6 +121,19 @@ class GatewayService:
                 extra={"extra": {"error": str(exc), "scope": scope}},
             )
 
+    async def _configure_default_scope(self) -> None:
+        scope = self.config.channel_scope
+        try:
+            await self.meshcore.set_default_scope(scope)
+            logger.info(
+                "default flood scope configured", extra={"extra": {"scope": scope}}
+            )
+        except Exception as exc:
+            logger.exception(
+                "failed to set default flood scope",
+                extra={"extra": {"error": str(exc), "scope": scope}},
+            )
+
     async def _wait_or_stop(self, seconds: float) -> bool:
         try:
             await asyncio.wait_for(self.stop_event.wait(), timeout=seconds)
@@ -170,6 +184,8 @@ class GatewayService:
                     await self.meshcore.sync_clock()
                     await self._ensure_nexus_channel()
                     await self._configure_scope()
+                    await self._configure_default_scope()
+                    await self.meshcore.set_path_hash_mode(self.config.path_hash_mode)
                 self._last_companion_uptime = uptime
             except Exception as exc:
                 logger.warning(

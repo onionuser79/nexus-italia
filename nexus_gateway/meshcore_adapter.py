@@ -173,6 +173,11 @@ class MeshCoreAdapter:
         await self._mc.commands.set_flood_scope(scope)
         logger.info("channel scope set", extra={"extra": {"scope": scope}})
 
+    async def set_default_scope(self, scope: str) -> None:
+        assert self._mc is not None
+        await self._mc.commands.set_default_flood_scope(scope)
+        logger.info("default flood scope set", extra={"extra": {"scope": scope}})
+
     async def set_path_hash_mode(self, mode: int = 1) -> None:
         assert self._mc is not None
         await self._mc.commands.set_path_hash_mode(mode)
