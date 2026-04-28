@@ -39,6 +39,8 @@ class RuntimeConfig:
     advert_enabled: bool = False
     flood_advert_interval_sec: int = 10800
     flood_advert_enabled: bool = False
+    default_scope_advert_enabled: bool = False
+    default_scope_advert_interval_sec: int = 10800
 
 
 @dataclass
@@ -51,6 +53,7 @@ class GatewayConfig:
     channel_name: str
     channel_number: int
     channel_scope: str
+    default_scope: str
     channel_secret: str
     path_hash_mode: int
     protocol_version: str
@@ -62,6 +65,7 @@ class GatewayConfig:
 def load_config(path: str | Path) -> GatewayConfig:
     data = yaml.safe_load(Path(path).read_text())
     meshcore_data = data.get("meshcore", data.get("meshcli", {}))
+    channel_scope = str(data.get("channel_scope", "it-lom-mi"))
     return GatewayConfig(
         gateway_id=data["gateway_id"],
         site_name=data["site_name"],
@@ -70,7 +74,8 @@ def load_config(path: str | Path) -> GatewayConfig:
         radio_band=str(data["radio_band"]),
         channel_name=data["channel_name"],
         channel_number=int(data["channel_number"]),
-        channel_scope=str(data.get("channel_scope", "it-lo")),
+        channel_scope=channel_scope,
+        default_scope=str(data.get("default_scope", channel_scope)),
         channel_secret=str(data.get("channel_secret", "")),
         path_hash_mode=int(data.get("path_hash_mode", 1)),
         protocol_version=str(data["protocol_version"]),
@@ -92,5 +97,7 @@ def load_config(path: str | Path) -> GatewayConfig:
             advert_enabled=bool(data["runtime"].get("advert_enabled", False)),
             flood_advert_interval_sec=int(data["runtime"].get("flood_advert_interval_sec", 10800)),
             flood_advert_enabled=bool(data["runtime"].get("flood_advert_enabled", False)),
+            default_scope_advert_enabled=bool(data["runtime"].get("default_scope_advert_enabled", False)),
+            default_scope_advert_interval_sec=int(data["runtime"].get("default_scope_advert_interval_sec", 10800)),
         ),
     )

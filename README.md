@@ -63,26 +63,48 @@ Working configuration already verified:
 Service status:
 
 ```bash
-sudo systemctl status nexus-gateway --no-pager
+sudo systemctl status nexus-gateway-v2 --no-pager
 ```
 
 Live logs:
 
 ```bash
-journalctl -u nexus-gateway -f
+journalctl -u nexus-gateway-v2 -f
 ```
 
 Restart:
 
 ```bash
-sudo systemctl restart nexus-gateway
+sudo systemctl restart nexus-gateway-v2
 ```
 
 ## Installed paths
 
-- Application: `/opt/nexus-gateway`
-- Configuration: `/opt/nexus-gateway/config.yaml`
-- Service: `/etc/systemd/system/nexus-gateway.service`
+- Application: `/opt/nexus-gateway-v2`
+- Configuration: `/opt/nexus-gateway-v2/config.yaml`
+- Service: `/etc/systemd/system/nexus-gateway-v2.service`
+
+## Development deploy
+
+The `deploy.sh` script deploys local changes to the gateway host via an SSH relay (macmini).
+It does not require `rsync` on the calling machine — packaging is done with `tar`.
+
+```bash
+bash nexus-italia/deploy.sh              # via macmini-lan (LAN)
+bash nexus-italia/deploy.sh macmini-ext  # via macmini-ext (internet/mobile)
+```
+
+What it does:
+1. Packages the project with `tar` (excludes `.git`, `__pycache__`, `*.pyc`, `deploy.sh`)
+2. Stages the archive to `~/deploy-staging/` on the relay host
+3. The relay runs `rsync` to `~/nexus-italia-v2/` on the gateway host
+4. Copies `nexus_gateway/` and `requirements.txt` to `/opt/nexus-gateway-v2/` via `sudo`
+
+The service is **not restarted automatically** — restart manually after verifying the deploy:
+
+```bash
+ssh macmini-lan 'ssh iw2ohx2 sudo systemctl restart nexus-gateway-v2'
+```
 
 ---
 
@@ -191,34 +213,46 @@ runtime:
 
 An initial beacon is also sent **10 seconds after startup**, to announce the gateway immediately on the RF network after a reboot.
 
-### 8. Periodic advert (0hop and flood)
+### 8. Periodic advert (0hop, flood, and default-scope flood)
 
 The gateway can periodically send advert commands to announce the Companion on the MeshCore network:
 
 - **advert (0hop)** — local announcement, not propagated. Default: every **1 hour**.
-- **floodadv (flood)** — announcement propagated across the mesh network. Default: every **3 hours**.
+- **floodadv (flood)** — announcement propagated at channel scope. Default: every **3 hours**.
+- **default-scope floodadv** — flood advert explicitly sent at `default_scope` (broader reach). Default: every **3 hours**.
+
+The default-scope flood advert re-asserts `default_scope` on the Companion before each transmission, then sends a flood advert. This ensures the Companion is visible to a wider area independently of the per-channel scope used for message relay. For example, with `channel_scope: "it-lom-mi"` and `default_scope: "it"`, Nexus messages stay within Lombardia/Milan while the gateway announces itself across all Italy.
 
 Configurable parameters in `config.yaml` under `runtime`:
 
 ```yaml
 runtime:
-  advert_enabled: true             # enable 0hop advert
-  advert_interval_sec: 3600        # interval in seconds (default: 1 hour)
-  flood_advert_enabled: true       # enable flood advert
-  flood_advert_interval_sec: 10800 # interval in seconds (default: 3 hours)
+  advert_enabled: true                     # enable 0hop advert
+  advert_interval_sec: 3600                # interval in seconds (default: 1 hour)
+  flood_advert_enabled: true               # enable flood advert (channel scope)
+  flood_advert_interval_sec: 10800         # interval in seconds (default: 3 hours)
+  default_scope_advert_enabled: true       # enable flood advert with default_scope
+  default_scope_advert_interval_sec: 10800 # interval in seconds (default: 3 hours)
 ```
 
-Both adverts are also sent once at service startup (+15s and +20s respectively).
+All adverts are also sent once at service startup (+15s, +20s, +25s respectively).
 
 ### 9. Default flood scope configuration
 
 Starting from **meshcore >= 2.3.7**, the gateway also sets a **default flood scope** on the Companion at startup via `set_default_flood_scope()`. This is distinct from the per-channel flood scope set by `set_flood_scope()` (feature 1 above): the default scope applies as the device-level fallback for any channel that does not have an explicit scope configured.
 
-Both the channel scope and the default scope use the same `channel_scope` value from `config.yaml`:
+The default scope is controlled by the optional `default_scope` parameter in `config.yaml`. If omitted, it falls back to `channel_scope`:
 
 ```yaml
-channel_scope: "it-lom-mi"
+channel_scope: "it-lom-mi"   # scope for Nexus channel messages
+default_scope: "it"           # optional — scope for device-level adverts (broader reach)
 ```
+
+This separation allows a gateway to relay Nexus traffic with a tight regional scope while advertising its presence to a wider area. For example:
+- `channel_scope: "it-lom-mi"` — Nexus messages stay within Lombardia/Milan
+- `default_scope: "it"` — Companion adverts propagate across all Italy
+
+If `default_scope` is not set, it defaults to the same value as `channel_scope` (backward compatible with existing deployments).
 
 The default flood scope is applied:
 - At gateway startup, after the channel scope is set
@@ -237,6 +271,7 @@ radio_band: "868"
 channel_name: NEXUS
 channel_number: 1
 channel_scope: "it-lom-mi"
+default_scope: "it"           # optional — defaults to channel_scope if omitted
 channel_secret: "a45768ab48e203498edbc11b35cdfbd7"
 path_hash_mode: 1  # 0=1byte, 1=2byte (default), 2=3byte
 protocol_version: "1.0"
@@ -270,6 +305,8 @@ runtime:
   advert_interval_sec: 3600
   flood_advert_enabled: true
   flood_advert_interval_sec: 10800
+  default_scope_advert_enabled: true
+  default_scope_advert_interval_sec: 10800
 ```
 
 ---
@@ -281,7 +318,7 @@ The gateway includes a software version number (`__version__` in `nexus_gateway/
 Both values are included in heartbeat payloads:
 
 - `protocol_version` — MQTT message format version (from config, e.g. `"1.0"`)
-- `software_version` — gateway software release (from code, e.g. `"2.1.0"`)
+- `software_version` — gateway software release (from code, e.g. `"2.1.2"`)
 
 This allows tracking which software version is deployed on each gateway node.
 

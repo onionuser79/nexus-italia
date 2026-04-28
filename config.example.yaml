@@ -6,6 +6,7 @@ radio_band: "868"
 channel_name: NEXUS
 channel_number: 1
 channel_scope: "it-lom-mi"
+# default_scope: "it"  # optional — scope for device-level adverts; defaults to channel_scope if omitted
 channel_secret: "a45768ab48e203498edbc11b35cdfbd7"  # 32-char hex = 16 bytes key
 path_hash_mode: 1  # 0=1byte(256 IDs), 1=2byte(65536 IDs), 2=3byte(16M IDs)
 protocol_version: "1.0"
@@ -35,7 +36,9 @@ runtime:
   beacon_interval_sec: 10800
   beacon_channel: 2
   beacon_text: "NEXUS-ITALIA Gateway [sigla provincia] - meshcoreitalia.it"
-  advert_enabled: true             # advert 0hop
-  advert_interval_sec: 3600        # ogni 1 ora
-  flood_advert_enabled: true       # flood advert
-  flood_advert_interval_sec: 10800 # ogni 3 ore
+  advert_enabled: true                     # advert 0hop
+  advert_interval_sec: 3600                # ogni 1 ora
+  flood_advert_enabled: true               # flood advert (channel scope)
+  flood_advert_interval_sec: 10800         # ogni 3 ore
+  default_scope_advert_enabled: true       # flood advert with default_scope (broader reach)
+  default_scope_advert_interval_sec: 10800 # ogni 3 ore

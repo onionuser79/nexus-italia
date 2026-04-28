@@ -63,6 +63,17 @@ class GatewayService:
                 "flood advert enabled",
                 extra={"extra": {"interval_sec": self.config.runtime.flood_advert_interval_sec}},
             )
+        if self.config.runtime.default_scope_advert_enabled:
+            tasks.append(
+                asyncio.create_task(self._default_scope_advert_loop(), name="default_scope_advert")
+            )
+            logger.info(
+                "default scope flood advert enabled",
+                extra={"extra": {
+                    "scope": self.config.default_scope,
+                    "interval_sec": self.config.runtime.default_scope_advert_interval_sec,
+                }},
+            )
 
         logger.info("gateway service started")
         await self.stop_event.wait()
@@ -122,7 +133,7 @@ class GatewayService:
             )
 
     async def _configure_default_scope(self) -> None:
-        scope = self.config.channel_scope
+        scope = self.config.default_scope
         try:
             await self.meshcore.set_default_scope(scope)
             logger.info(
@@ -237,6 +248,18 @@ class GatewayService:
                     extra={"extra": {"error": str(exc)}},
                 )
             await self._wait_or_stop(self.config.runtime.flood_advert_interval_sec)
+
+    async def _default_scope_advert_loop(self) -> None:
+        await self._wait_or_stop(25)
+        while not self.stop_event.is_set():
+            try:
+                await self.meshcore.send_default_scope_flood_advert(self.config.default_scope)
+            except Exception as exc:
+                logger.exception(
+                    "default scope flood advert failed",
+                    extra={"extra": {"error": str(exc), "scope": self.config.default_scope}},
+                )
+            await self._wait_or_stop(self.config.runtime.default_scope_advert_interval_sec)
 
     def _schedule_downlink(self, payload: dict) -> None:
         if self._loop is not None and not self._loop.is_closed():

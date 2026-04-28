@@ -154,6 +154,12 @@ class MeshCoreAdapter:
         await self._mc.commands.send_advert(flood=True)
         logger.info("flood advert transmitted")
 
+    async def send_default_scope_flood_advert(self, scope: str) -> None:
+        assert self._mc is not None
+        await self._mc.commands.set_default_flood_scope(scope)
+        await self._mc.commands.send_advert(flood=True)
+        logger.info("default scope flood advert transmitted", extra={"extra": {"scope": scope}})
+
     async def get_uptime(self) -> int:
         assert self._mc is not None
         result = await self._mc.commands.get_stats_core()
