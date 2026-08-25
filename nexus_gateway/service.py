@@ -3,12 +3,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
+import time
 from datetime import datetime, timezone
 
 from . import __version__
 from .config import GatewayConfig
 from .dedupe import TTLCache
-from .meshcore_adapter import MeshCoreAdapter
+from .meshcore_adapter import CompanionCommandError, MeshCoreAdapter
 from .mqtt_client import GatewayMqttClient
 
 logger = logging.getLogger("nexus_gateway.service")
@@ -22,7 +23,13 @@ class GatewayService:
         self.stop_event = asyncio.Event()
         self.mqtt = GatewayMqttClient(config.mqtt, self._schedule_downlink)
         self._loop: asyncio.AbstractEventLoop | None = None
-        self._last_companion_uptime: int = 0
+        # None = "not yet known". Must not default to 0: a 0 makes the
+        # `uptime < last` reboot test permanently false once an unreadable
+        # companion has reported 0 even one time.
+        self._last_companion_uptime: int | None = None
+        self._companion_fail_count: int = 0
+        self._last_reconnect_monotonic: float | None = None
+        self._reconnect_count: int = 0
 
     async def start(self) -> None:
         logger.info(
@@ -47,6 +54,17 @@ class GatewayService:
             asyncio.create_task(self._message_consumer_loop(), name="msg_consumer"),
             asyncio.create_task(self._companion_health_loop(), name="companion_health"),
         ]
+        if self.config.runtime.rx_watchdog_enabled:
+            tasks.append(
+                asyncio.create_task(self._rx_watchdog_loop(), name="rx_watchdog")
+            )
+            logger.info(
+                "rx watchdog enabled",
+                extra={"extra": {
+                    "warn_sec": self.config.runtime.rx_watchdog_warn_sec,
+                    "reconnect_sec": self.config.runtime.rx_watchdog_reconnect_sec,
+                }},
+            )
         if self.config.runtime.beacon_text:
             tasks.append(asyncio.create_task(self._beacon_loop(), name="beacon"))
         if self.config.runtime.advert_enabled:
@@ -180,11 +198,72 @@ class GatewayService:
                 )
             await self._wait_or_stop(self.config.runtime.poll_interval_sec)
 
+    async def _reapply_companion_config(self) -> None:
+        await self.meshcore.sync_clock()
+        await self._ensure_nexus_channel()
+        await self._configure_scope()
+        await self._configure_default_scope()
+        await self.meshcore.set_path_hash_mode(self.config.path_hash_mode)
+
+    async def _recover_companion(self, reason: str) -> bool:
+        """Reopen the serial transport and re-apply config. Returns True on success.
+
+        Rate-limited by reconnect_cooldown_sec so a persistently dead companion
+        produces a slow retry, not a tight cycle of port open/close.
+        """
+        now = time.monotonic()
+        if (
+            self._last_reconnect_monotonic is not None
+            and now - self._last_reconnect_monotonic
+            < self.config.runtime.reconnect_cooldown_sec
+        ):
+            logger.debug(
+                "companion recovery suppressed by cooldown",
+                extra={"extra": {
+                    "reason": reason,
+                    "since_last_sec": round(now - self._last_reconnect_monotonic, 1),
+                    "cooldown_sec": self.config.runtime.reconnect_cooldown_sec,
+                }},
+            )
+            return False
+
+        self._last_reconnect_monotonic = now
+        self._reconnect_count += 1
+        logger.warning(
+            "companion recovery starting",
+            extra={"extra": {
+                "reason": reason,
+                "attempt": self._reconnect_count,
+            }},
+        )
+        try:
+            await self.meshcore.reconnect()
+            await self._reapply_companion_config()
+        except Exception as exc:
+            logger.exception(
+                "companion recovery failed",
+                extra={"extra": {"reason": reason, "error": str(exc)}},
+            )
+            return False
+
+        # Clear the failure state only once the port is genuinely back.
+        self._companion_fail_count = 0
+        self._last_companion_uptime = None
+        logger.warning(
+            "companion recovery completed",
+            extra={"extra": {"reason": reason, "attempt": self._reconnect_count}},
+        )
+        return True
+
     async def _companion_health_loop(self) -> None:
         while not self.stop_event.is_set():
             try:
                 uptime = await self.meshcore.get_uptime()
-                if uptime < self._last_companion_uptime:
+                self._companion_fail_count = 0
+                if (
+                    self._last_companion_uptime is not None
+                    and uptime < self._last_companion_uptime
+                ):
                     logger.warning(
                         "companion reboot detected, re-applying scope",
                         extra={"extra": {
@@ -192,17 +271,69 @@ class GatewayService:
                             "new_uptime": uptime,
                         }},
                     )
-                    await self.meshcore.sync_clock()
-                    await self._ensure_nexus_channel()
-                    await self._configure_scope()
-                    await self._configure_default_scope()
-                    await self.meshcore.set_path_hash_mode(self.config.path_hash_mode)
+                    await self._reapply_companion_config()
                 self._last_companion_uptime = uptime
-            except Exception as exc:
+            except CompanionCommandError as exc:
+                self._companion_fail_count += 1
                 logger.warning(
+                    "companion unreadable",
+                    extra={"extra": {
+                        "error": str(exc),
+                        "consecutive_failures": self._companion_fail_count,
+                        "threshold": self.config.runtime.companion_fail_threshold,
+                    }},
+                )
+                if (
+                    self._companion_fail_count
+                    >= self.config.runtime.companion_fail_threshold
+                ):
+                    await self._recover_companion("companion unreadable")
+            except Exception as exc:
+                logger.exception(
                     "companion health check failed",
                     extra={"extra": {"error": str(exc)}},
                 )
+            await self._wait_or_stop(self.config.runtime.heartbeat_interval_sec)
+
+    async def _rx_watchdog_loop(self) -> None:
+        """Reconnect when the radio has gone deaf.
+
+        Covers the case the health loop cannot see: the serial link answers
+        commands normally (so uptime reads fine) but no frames arrive, which is
+        what a detached or wedged radio looks like from userspace. Only inbound
+        traffic proves the receiver works, so RX silence is the trigger.
+        """
+        warn_sec = self.config.runtime.rx_watchdog_warn_sec
+        reconnect_sec = self.config.runtime.rx_watchdog_reconnect_sec
+        warned = False
+        while not self.stop_event.is_set():
+            age = self.meshcore.rx_age_sec
+            if age is not None:
+                if age >= reconnect_sec:
+                    logger.error(
+                        "rx silence exceeded reconnect threshold, recovering",
+                        extra={"extra": {
+                            "rx_age_sec": round(age),
+                            "reconnect_sec": reconnect_sec,
+                        }},
+                    )
+                    if await self._recover_companion("rx silence"):
+                        # reconnect() restarts the RX clock, so the next
+                        # evaluation measures the fresh link.
+                        warned = False
+                elif age >= warn_sec:
+                    if not warned:
+                        logger.warning(
+                            "rx silence detected",
+                            extra={"extra": {
+                                "rx_age_sec": round(age),
+                                "warn_sec": warn_sec,
+                                "reconnect_sec": reconnect_sec,
+                            }},
+                        )
+                        warned = True
+                else:
+                    warned = False
             await self._wait_or_stop(self.config.runtime.heartbeat_interval_sec)
 
     async def _heartbeat_loop(self) -> None:
@@ -298,12 +429,33 @@ class GatewayService:
             )
 
     def publish_heartbeat(self) -> None:
+        # Report measured health, not a constant. A hardcoded "online" made the
+        # heartbeat useless for spotting an off-air gateway: it kept asserting
+        # health for the whole of a 46h silent outage (2026-08-23).
+        rx_age = self.meshcore.rx_age_sec
+        connected = self.meshcore.is_connected
+        # Gate on the reconnect threshold, not the warn threshold: measured RX
+        # gaps reach ~6.8 h in normal operation, so warn-level silence is
+        # routine and would make "degraded" flap. Consumers wanting a tighter
+        # policy can read last_rx_age_sec directly.
+        degraded = (
+            not connected
+            or self._companion_fail_count > 0
+            or (
+                rx_age is not None
+                and rx_age >= self.config.runtime.rx_watchdog_reconnect_sec
+            )
+        )
         payload = {
             "gateway_id": self.config.gateway_id,
             "site_name": self.config.site_name,
             "region": self.config.region,
             "radio_band": self.config.radio_band,
-            "status": "online",
+            "status": "degraded" if degraded else "online",
+            "companion_connected": connected,
+            "last_rx_age_sec": None if rx_age is None else round(rx_age),
+            "companion_fail_count": self._companion_fail_count,
+            "reconnect_count": self._reconnect_count,
             "serial_port": self.config.meshcore.serial_port,
             "last_seen_utc": datetime.now(timezone.utc).isoformat(),
             "protocol_version": self.config.protocol_version,

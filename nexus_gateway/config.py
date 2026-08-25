@@ -41,6 +41,24 @@ class RuntimeConfig:
     flood_advert_enabled: bool = False
     default_scope_advert_enabled: bool = False
     default_scope_advert_interval_sec: int = 10800
+    # Recovery / liveness.
+    #
+    # Thresholds are set from measured RX inter-arrival gaps on the Bollate
+    # gateway over 7843 frames (2026-07-05 -> 2026-08-23): median 121 s,
+    # p95 2168 s, p99 6098 s, max 24381 s (6.8 h). Legitimate overnight lulls
+    # are therefore hours long, so the reconnect threshold must sit above them
+    # or the watchdog cycles the port for nothing — at 3600 s the same data
+    # yields 177 spurious reconnects (~3.6/day).
+    #
+    # 28800 s (8 h) had zero false positives across that window. Detection
+    # latency is acceptable because this is only the backstop for "serial fine
+    # but radio deaf"; a detached USB companion is caught by the health loop in
+    # companion_fail_threshold * heartbeat_interval_sec (~90 s).
+    rx_watchdog_enabled: bool = True
+    rx_watchdog_warn_sec: int = 7200
+    rx_watchdog_reconnect_sec: int = 28800
+    companion_fail_threshold: int = 3
+    reconnect_cooldown_sec: int = 300
 
 
 @dataclass
@@ -99,5 +117,10 @@ def load_config(path: str | Path) -> GatewayConfig:
             flood_advert_enabled=bool(data["runtime"].get("flood_advert_enabled", False)),
             default_scope_advert_enabled=bool(data["runtime"].get("default_scope_advert_enabled", False)),
             default_scope_advert_interval_sec=int(data["runtime"].get("default_scope_advert_interval_sec", 10800)),
+            rx_watchdog_enabled=bool(data["runtime"].get("rx_watchdog_enabled", True)),
+            rx_watchdog_warn_sec=int(data["runtime"].get("rx_watchdog_warn_sec", 7200)),
+            rx_watchdog_reconnect_sec=int(data["runtime"].get("rx_watchdog_reconnect_sec", 28800)),
+            companion_fail_threshold=int(data["runtime"].get("companion_fail_threshold", 3)),
+            reconnect_cooldown_sec=int(data["runtime"].get("reconnect_cooldown_sec", 300)),
         ),
     )

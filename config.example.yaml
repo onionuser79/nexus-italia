@@ -42,3 +42,19 @@ runtime:
   flood_advert_interval_sec: 10800         # ogni 3 ore
   default_scope_advert_enabled: true       # flood advert with default_scope (broader reach)
   default_scope_advert_interval_sec: 10800 # ogni 3 ore
+
+  # --- Recovery / liveness (v2.2.0) ---
+  # Il companion USB puo' ri-enumerarsi (brownout, watchdog reset): il vecchio
+  # file descriptor resta morto e va riaperto. Questi parametri governano il
+  # rilevamento e il recupero automatico.
+  # Soglie ricavate dai gap RX misurati a Bollate su 7843 frame
+  # (2026-07-05 -> 2026-08-23): mediana 121 s, p99 6098 s, max 24381 s (6,8 h).
+  # Le pause notturne legittime durano ore: con 3600 s si otterrebbero 177
+  # riconnessioni inutili (~3,6/giorno). 28800 s (8 h) = zero falsi positivi.
+  # Il caso reale (companion USB staccato) viene comunque intercettato dal
+  # health loop in ~90 s, non da questo watchdog.
+  rx_watchdog_enabled: true                # riconnette se la radio non riceve piu'
+  rx_watchdog_warn_sec: 7200               # 2 ore di silenzio RX -> WARNING
+  rx_watchdog_reconnect_sec: 28800         # 8 ore di silenzio RX -> riconnessione
+  companion_fail_threshold: 3              # letture uptime fallite prima del recupero
+  reconnect_cooldown_sec: 300              # minimo fra due tentativi di recupero

@@ -86,25 +86,48 @@ sudo systemctl restart nexus-gateway-v2
 
 ## Development deploy
 
-The `deploy.sh` script deploys local changes to the gateway host via an SSH relay (macmini).
-It does not require `rsync` on the calling machine — packaging is done with `tar`.
+The `deploy.sh` script deploys local changes to the gateway host. It auto-detects
+whether it is already running on macmini and deploys **directly**, rather than
+SSHing to itself through a relay.
 
 ```bash
-bash nexus-italia/deploy.sh              # via macmini-lan (LAN)
-bash nexus-italia/deploy.sh macmini-ext  # via macmini-ext (internet/mobile)
+bash nexus-italia/deploy.sh              # auto-detect (direct when on macmini)
+bash nexus-italia/deploy.sh local        # force direct deploy
+bash nexus-italia/deploy.sh macmini-lan  # force relay via macmini-lan (LAN)
+bash nexus-italia/deploy.sh macmini-ext  # force relay (internet/mobile)
 ```
 
-What it does:
-1. Packages the project with `tar` (excludes `.git`, `__pycache__`, `*.pyc`, `deploy.sh`)
-2. Stages the archive to `~/deploy-staging/` on the relay host
-3. The relay runs `rsync` to `~/nexus-italia-v2/` on the gateway host
-4. Copies `nexus_gateway/` and `requirements.txt` to `/opt/nexus-gateway-v2/` via `sudo`
+Detection uses macmini's static LAN address (en9 wired `192.168.1.127`, en1
+Wi-Fi `192.168.1.128`), **not** the hostname — the machine reports a managed
+asset name (`DEL-02-0481-DT`), so a hostname test silently falls through to the
+relay path.
+
+Direct mode:
+1. Backs up `nexus_gateway/` and `config.yaml` on the target to `*.bak-<timestamp>`
+2. `rsync`s `nexus_gateway/`, `tests/` and `requirements.txt` to `~/nexus-italia-v2/`
+3. Installs into `/opt/nexus-gateway-v2/` via `sudo`
+4. Runs the test suite **on the target**, against the deployed venv
+
+Relay mode packages with `tar` (so `rsync` is not needed on the calling machine),
+stages to `~/deploy-staging/` on the relay, then rsyncs onward to the gateway.
 
 The service is **not restarted automatically** — restart manually after verifying the deploy:
 
 ```bash
-ssh macmini-lan 'ssh iw2ohx2 sudo systemctl restart nexus-gateway-v2'
+ssh iw2ohx2 sudo systemctl restart nexus-gateway-v2          # from macmini
+ssh macmini-lan 'ssh iw2ohx2 sudo systemctl restart nexus-gateway-v2'   # via relay
 ```
+
+### Tests
+
+```bash
+ssh iw2ohx2 'cd /opt/nexus-gateway-v2 && ./.venv/bin/python -m unittest discover -s tests -v'
+```
+
+`tests/test_recovery.py` is a regression suite for the 2026-08-23 silent-outage
+defects (32 tests, stdlib `unittest` — no pytest dependency). It must be run
+against the deployment venv, which provides the real `meshcore` library and
+`yaml`; macmini's system Python has neither.
 
 ---
 
@@ -194,6 +217,68 @@ The scope settings, clock, channel configuration, and path hash mode are lost if
 
 This ensures messages are never sent without scope on the mesh, the Nexus channel is always present, the Companion clock is always accurate, and both scope settings and path hash mode are correctly configured, even after unexpected restarts.
 
+Reboot detection tracks the last known uptime as "unknown" (`None`) until a reading succeeds — it is never seeded with `0`. A `0` sentinel makes the `uptime < previous` test permanently false once a bad reading lands, which is what turned a recoverable event into a 46-hour outage in v2.1.2 (see *Failure detection and recovery*).
+
+### 6b. Failure detection and recovery (v2.2.0)
+
+The Companion's USB-serial device can **re-enumerate** — a brownout or firmware watchdog reset makes the kernel drop and re-add it (`usb 1-1: USB disconnect` followed by a fresh `cp210x converter now attached to ttyUSB0`). The previously open file descriptor is dead and never heals; only reopening the port recovers. The udev symlink (`/dev/meshcore-nexus`) is stable across re-enumeration, so the configured path stays valid.
+
+Before v2.2.0 the gateway did not survive this. It kept running, kept MQTT connected, and kept logging `beacon transmitted` every three hours into a closed port — silently off the air from 2026-08-23 14:47 to 2026-08-25 12:47 CEST.
+
+Three defects combined to hide it, all fixed in v2.2.0:
+
+| # | Defect | Fix |
+|---|--------|-----|
+| 1 | TX/config wrappers logged success without inspecting the returned `Event`. The meshcore library **never raises** on a dead transport — `send()` returns `Event(EventType.ERROR, {"reason": "timeout"})`. | Every command result passes through `_check()`, raising `CompanionCommandError`. |
+| 2 | `get_uptime()` fell back to `0`. `{"reason": "timeout"}` is a dict, so `data.get("uptime", 0)` silently yielded `0`. | Raises `CompanionCommandError`; never returns a fallback. |
+| 3 | Reboot detection was `uptime < last_uptime` with `last_uptime` seeded at `0`, so once poisoned, `0 < 0` was false forever and the check never fired again. | Sentinel is `None`; a failed read never overwrites the last good value. |
+
+Two detectors now run:
+
+**Health loop** (primary) — reads `get_stats_core()` every `heartbeat_interval_sec`. After `companion_fail_threshold` consecutive unreadable polls it reopens the port and re-applies all configuration. Detects a detached companion in roughly `companion_fail_threshold × heartbeat_interval_sec` (~90 s at defaults).
+
+**RX watchdog** (backstop) — covers the case the health loop cannot see: serial answers commands normally but no frames arrive, i.e. a wedged or deaf radio. Only inbound traffic proves the receiver works, so RX silence is the trigger. Any received frame counts, including public-channel traffic the gateway goes on to discard.
+
+```yaml
+runtime:
+  rx_watchdog_enabled: true
+  rx_watchdog_warn_sec: 7200        # 2 h  -> WARNING
+  rx_watchdog_reconnect_sec: 28800  # 8 h  -> reconnect
+  companion_fail_threshold: 3       # unreadable polls before recovery
+  reconnect_cooldown_sec: 300       # minimum spacing between attempts
+```
+
+**The reconnect threshold must stay generous.** Measured RX inter-arrival gaps on the Bollate gateway across 7843 frames (2026-07-05 → 2026-08-23): median 121 s, p95 2168 s, p99 6098 s, **max 24381 s (6.8 h)**. Legitimate overnight lulls last hours. A 3600 s threshold would have fired 177 spurious reconnects (~3.6/day) over that window; 28800 s produced zero false positives. Detection latency is acceptable because the real-world failure (detached USB) is caught by the health loop in ~90 s, not here.
+
+Recovery is rate-limited by `reconnect_cooldown_sec` so a persistently dead companion retries slowly instead of cycling the port. On reconnect, the Companion replays messages buffered during the outage — expect a burst carrying **old** `sender_timestamp` values; it is backlog, not a live traffic spike.
+
+#### Diagnosing a silent outage
+
+`systemctl status` is useless here — the process stays `active (running)` throughout. Fastest checks first:
+
+```bash
+# 1. Does anything hold the serial port? Empty output = detached companion.
+sudo fuser -v /dev/ttyUSB0
+
+# 2. Confirm from the process side — healthy shows "N -> /dev/ttyUSB0",
+#    a zombie has only sockets and /dev/null.
+sudo ls -l /proc/$(systemctl show -p MainPID --value nexus-gateway-v2)/fd | grep -i tty
+
+# 3. RX is the only honest liveness signal. Zero frames for hours = off air,
+#    regardless of what the "transmitted" lines claim.
+sudo journalctl -u nexus-gateway-v2 --since "1 hour ago" \
+  | grep -c "raw channel message received"
+
+# 4. True outage start: USB disconnect / re-attach in the kernel log.
+sudo dmesg -T | grep -i ttyUSB
+```
+
+**Timing fingerprint:** on a dead transport, consecutive init log lines sit **15–30 s apart** (library command timeouts). A healthy init completes in **milliseconds**. Wide gaps in the startup sequence mean commands are timing out silently.
+
+The heartbeat now reports measured health rather than a hardcoded `"online"`: `status` (`online`/`degraded`), `companion_connected`, `last_rx_age_sec`, `companion_fail_count`, and `reconnect_count`. `status` is gated on the reconnect threshold, not the warn threshold, so routine quiet periods do not make it flap; consumers wanting a tighter policy should read `last_rx_age_sec` directly.
+
+> **Monitoring:** any external probe must assert **recent RX** (or serial-fd presence). A probe that only checks whether the service is active would have reported green for the entire 46-hour outage.
+
 ### 7. Periodic RF beacon on the Nexus channel
 
 The gateway periodically transmits a beacon message via RF on the Nexus channel.
@@ -260,6 +345,25 @@ The default flood scope is applied:
 
 This feature requires `meshcore >= 2.3.7` and `meshcore-cli >= 1.5.7`. (Credit: Armando Accardo IK2XYP)
 
+> **Known limitation — firmware may reject `SET_DEFAULT_FLOOD_SCOPE`.**
+> On the Bollate companion (Heltec V3) this command returns an immediate
+> `ERROR` (~9 ms, so a firmware rejection rather than a timeout). Because
+> v2.1.x logged success without checking the result, the failure was invisible
+> and **the default flood scope was almost certainly never actually applied**
+> on this node. v2.2.0 surfaces it as
+> `default flood scope refused, advertising without it`.
+>
+> The scope-set is deliberately **best-effort**: on refusal the flood advert is
+> still transmitted, matching the previous effective behaviour rather than
+> dropping the 3-hourly advert. The success line carries `scope_applied:
+> true|false` so the distinction is visible in the log. Losing the wider scope
+> reduces advert reach; it does not stop the gateway.
+>
+> `set_time` behaves the same way on this firmware and is treated the same way
+> (`companion clock sync refused, continuing`) — a refused clock sync is no
+> reason to keep the gateway off the air. Both are worth revisiting against a
+> newer companion firmware build.
+
 ### Full configuration example
 
 ```yaml
@@ -318,7 +422,7 @@ The gateway includes a software version number (`__version__` in `nexus_gateway/
 Both values are included in heartbeat payloads:
 
 - `protocol_version` — MQTT message format version (from config, e.g. `"1.0"`)
-- `software_version` — gateway software release (from code, e.g. `"2.1.2"`)
+- `software_version` — gateway software release (from code, e.g. `"2.2.0"`)
 
 This allows tracking which software version is deployed on each gateway node.
 
@@ -328,3 +432,27 @@ This allows tracking which software version is deployed on each gateway node.
 
 The install script adds the service user to the `dialout` group for serial port access.
 After installation, if the Companion is not immediately detected by the service, a Raspberry Pi reboot may help.
+
+### If the gateway looks alive but nobody hears it
+
+Do not trust `systemctl status`, and do not trust `beacon transmitted` lines from
+v2.1.x or earlier — both stayed reassuring through a 46-hour outage. Go straight to
+`sudo fuser -v /dev/ttyUSB0` and the RX frame count. See
+*Failure detection and recovery* for the full playbook.
+
+On v2.2.0 the gateway recovers from a re-enumerated companion on its own (~90 s).
+If it does not, check that `/dev/meshcore-nexus` still resolves — a udev rule that
+no longer matches leaves the configured path dangling, and reconnection cannot
+succeed until the symlink is restored.
+
+### Companions on this host
+
+Two MeshCore companions are separated by udev symlink, so they never contend:
+
+| Symlink | Device | Used by |
+|---------|--------|---------|
+| `/dev/meshcore-nexus` | ttyUSB0 (CP2102) | `nexus-gateway-v2.service` |
+| `/dev/meshcore-remoteterm` | ttyUSB1 (CP2102) | `remoteterm.service` |
+
+Always reference the symlink, never `ttyUSB0` directly — the `ttyUSB*` numbering
+is assignment order and can move across re-enumeration.
